@@ -1,6 +1,6 @@
-# ✨ DataAlchemy Repository ✨
+# ✨ Mori DataAlchemy Repository ✨
 
-Welcome to the DataAlchemy repository! 🎉   
+Welcome to my DataAlchemy repository! 🎉   
 This is a collection of projects and code related to data science, analytics, and data engineering. Here, you'll find projects implemented in R, Python, and DBT (Data Build Tool). 💻
 
 ## Project Directory 📂
