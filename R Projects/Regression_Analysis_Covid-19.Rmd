@@ -1,0 +1,1062 @@
+---
+title: "Regression Analysis Covid-19"
+author: "Mora Assereto Farroni"
+date: "2023-07-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Regression Analysis Covid-19
+
+**Objective:** To build a linear model that allows us to understand what were the determining factors in the deaths that occurred due to Covid-19, which had a wide variability in different countries.
+
+## Exploratory data analysis
+
+The model is based on a set of demographic, geographic and public health variables obtained from 139 countries:
+
+-   `Hombres80` population of men over 80 years of age (% of male population).
+
+-   `Mujeres80` population of women over 80 (% of female population).
+
+-   `Pobla80`: average between `Female80` & `Male80`.
+
+-   `Pobla65`: population over 65 (% of population).
+
+-   `PoblaMid:` population aged 15-64 (% of population).
+
+-   `PoblaData`: population in 2018 (by 100 million people).
+
+-   `PoblaDens`: population density (hundreds of people per square kilometre of land area)
+
+-   `Mujeres`: Female population (% of total population)
+
+-   `Urbano`: Urban population (% of total population)
+
+-   `ExpectVida`: Life expectancy at birth, total (years)
+
+-   `NeontlMort`: Neonatal mortality rate, neonatal (per 1000 live births)
+
+-   `DisMort`: Mortality from cardiovascular disease, cancer, diabetes or chronic kidney disease between the exact ages of 30 and 70 (%)
+
+-   `Lesion`: Cause of death by injury (% of total)
+
+-   `EnfNoTrans`: Cause of death from non-communicable diseases (% of total)
+
+-   `EnfTrans`: Cause of death from communicable diseases and maternal, prenatal and nutritional conditions (% of total)
+
+-   `PBI`: gross domestic product per capita PPP (thousands of current international dollars)
+
+-   `Tuberculosis`: Incidence of tuberculosis (per 1000 people)
+
+-   `Diabetes`: Prevalence of diabetes (% of population aged 20-79 years)
+
+-   `Medicos`: Doctors (per 1000 people)
+
+-   `Camas`: Hospital beds (per 1000 persons)
+
+-   `ImmunSaramp`: Measles immunisation (% of children aged 12-23 months)
+
+-   `TempMarzo`: Average temperature in March.
+
+-   `HipTen.H`: Crude prevalence of hypertension in 2010 in men
+
+-   `HipTen.M`: Crude prevalence of hypertension in women in 2010
+
+-   `HipTen`: Average of HT.women and HT.men
+
+-   `BCG`: Immunisation strategy `0 = selectiva, 1 = todos.`
+
+-   `BCGf`: It is the BCG variable written as a factor.
+
+-   `Tiempo`: number of days between the first recorded case of COVID-19 and 31 December 2019.
+
+-   `geoid`: ID to identify the area
+
+-   `CntrName` : Country
+
+Response variable:
+
+`l10muertes.permil`: log10(deaths.permil+1) where deaths.permil is the number of deaths per million population.
+
+### Libreries
+
+```{r}
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(tidyverse)
+library(hrbrthemes)
+library(ggpubr)
+library(cowplot)
+library(caTools)
+library(corrplot)
+library(Hmisc)
+library(multcomp)
+library(readxl)
+library(gmodels)
+library(ggthemes)
+library(devtools)
+library(car)
+library(leaflet)
+library(psych)
+```
+
+### Load the dataset
+
+```{r}
+covid <- read.table('COVID.txt', header = TRUE)
+covid
+attach(covid)
+```
+
+Once the file is loaded we can start exploring the data.
+
+```{r}
+glimpse(covid)
+```
+
+With this we can see that we have 31 numerical variables (dbl) and the rest with characters.let's use `describe()`, which for numerical variables shows us the descriptive statistics, the number of observations, the missing values. For categorical variables, it shows frequency, proportions and missing values.
+
+```{r}
+describe(covid)
+
+```
+
+```{r}
+  summary = summary(covid)
+  summary
+```
+
+### Characteristics and relationships between variables
+
+#### Categorisation of features
+
+Knowing what each variable means, understanding what type they are, and given that we are looking to build the best regression model to explain COVID-19 deaths, we could categorise them into the following groups:
+
+-   **Demographic:** all variables related to population issues. We include in this: `Hombres80`, `Mujeres80`, `Pobla80`, `Pobla65`, `PoblaMid, PoblaData`, `PoblaDens`, `Mujeres`, `Urbano`
+
+-   **Health:** we consider features that talk about diseases or health topics. `ExpectVida, NeontlMort, DisMort, Lesion, EnfNoTrans,Tuberculosis,Diabetes, ImmunSaramp, HipTen.H, HipTen.M, BCG, BCGf`
+
+-   **Health system:** these are the variables related to the type of health system, we could consider it within health as well. `Medicos,Camas`
+
+-   **Economic:** economic factors `PBI`
+
+-   **Environmental:** we consider environmental issues such as temperature or climate. `TempMarzo`
+
+-   **Geolocalization** `geoid, CntrName`
+
+-   **Covid Deaths** `l10muertes.permil, muertes.permil`
+
+Considering that covid is a highly contagious, airborne, respiratory disease, it most severely affects people over 65 years of age and that if the patient has a previous pathology such as diabetes, cardiac or respiratory problems or obesity, he/she may need to be treated in hospitals. It is interesting to study the following:
+
+-   Do the most densely populated countries have a high percentage of the population over 65?
+
+-   To understand what percentage of the population has a previous pathology, with the data we have it is complex to delimit this value and to draw an average would not be correct, so we decided to look at the relationship separately of pathology such as diabetes and hypertension with deaths.
+
+-   To classify countries by economic level using GDP, which in this case represents GDP per capita, and to understand if there is any relationship with deaths, if those countries with lower economic power have higher numbers of deaths.
+
+-   See the relationship between hospital beds and the 65 year old population
+
+-   Consider the ratio of doctors and hospital beds.
+
+### Graphic analysis
+
+#### Relationship between some variables
+
+**Countries deaths vs population 65**
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = Pobla65, color = Pobla65)) +
+  geom_point()
+```
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = PoblaMid, color = PoblaMid)) +
+  geom_point()
+```
+
+Lower percentages of population over 65 years correspond to fewer deaths per thousand, while higher percentages have some cases with more deaths. If we compare this with the graph showing deaths per thousand and the percentage of population between 15 and 64 years of age, we can see a difference in that most of the points are concentrated vertically near 0 and 50.
+
+**Countries higher density vs. population 65**
+
+```{r}
+ggplot(covid, aes(x = Pobla65, y = PoblaDens, color = PoblaDens)) +
+  geom_point()
+```
+
+As we have a value outside the range we cannot conclude anything.
+
+**Deaths vs pathologies**
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = Diabetes,
+                 colour = Diabetes)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradient(low = "#67c9ff", high = "#f2bbfc")
+```
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = HipTen.H,
+                 colour = HipTen.H)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradient(low = "#67c9ff", high = "#f2bbfc")
+```
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = HipTen.M,
+                 colour = HipTen.M)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradient(low = "#67c9ff", high = "#f2bbfc")
+```
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = BCG,
+                 colour = BCG)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradient(low = "#67c9ff", high = "#f2bbfc")
+```
+
+It cannot be seen that previous pathologies or immunisation have any direct relationship with deaths, but it can be seen that in some cases for diabetes and hypertension in populations with medium or high percentages there are more deaths. It may be that this factor was not considered much at that time because nowadays it is known that they imply a higher risk.
+
+**PBI vs Deaths**
+
+The gross domestic product is an economic indicator that takes into account various factors. If we divide it by the country's population, we obtain the GDP per capita, or PPP, the value that represents this variable. We could assume that those countries with a low or medium GDP per capita will face greater difficulties in implementing an immunisation policy because it will cost them more to buy vaccines or also because it is likely that the vast majority of their population is in severe economic conditions and cannot carry out isolation, do not have the education or resources to try not to get infected with covid, which can lead to more cases in countries with poor health systems causing more deaths. We will generate this indicator and classify the countries into 4 categories.
+
+\- Income Low PBI per capita \<1.036
+
+\- Income medium Low PBI per capita 1.036 - 4.045
+
+\- Income medium High PBI per capita 4.046 - 12.535
+
+\- Income High PBI per capita \>12.535
+
+```{r}
+ggplot(covid, aes(x = muertes.permil, y = PBI)) +
+  geom_point(aes(colour = PBI > 4.045 & PBI < 12.535),
+             show.legend = FALSE) +
+  geom_hline(yintercept = 4.045, linetype = "dashed") + 
+  geom_hline(yintercept = 12.535, linetype = "dashed")+
+  xlim(0, 50)+
+  ylim(0,60)
+```
+
+It does not appear that countries with lower PBI per capita have higher death rates.
+
+**Population 65 vs Hospital beds**
+
+```{r}
+ggplot(covid, aes(x = Pobla65, y = Camas, color = Camas)) +
+  geom_point()
+```
+
+**Hospital beds vs Medics**
+
+```{r}
+ggplot(covid, aes(x = Camas, y = Medicos,
+                 colour = Medicos)) +
+  geom_point(show.legend = FALSE) +
+  scale_color_gradient(low = "#67c9ff", high = "#f2bbfc")
+```
+
+#### General behaviour
+
+Since we have several variables in our dataset for a representative graphical analysis, we will select some of these variables to observe their behaviour.
+
+```{r}
+
+covid_datos_1 = data.frame(PoblaDens, Pobla80,Urbano, l10muertes.permil)
+
+covid_datos_2 = data.frame(Tuberculosis,Camas, TempMarzo,l10muertes.permil)
+
+covid_datos_3 = data.frame(l10muertes.permil, PBI,muertes.permil,BCG)
+
+covid_datos_1
+covid_datos_2
+covid_datos_3
+```
+
+**Correlation between variables, distribution and scatterplots**
+
+```{r}
+ggpairs(covid_datos_1,title="Covid")
+
+```
+
+```{r}
+ggpairs(covid_datos_2,title="Covid")
+```
+
+```{r}
+ggpairs(covid_datos_3,title="Covid")
+```
+
+**Analysis**
+
+-   The variable `l10deaths.permil` has the following correlations
+
+    -   **Positiva**:
+
+        -   `pob80` 0.688 strong relationship
+
+        -   `urbano` 0.57 strong relationship
+
+        -   `camas` 0.3 average relationship
+
+        -   `muertes.permil` 0.7 strong relationship
+
+        -   `PBI` 0.5 strong relationship
+
+    -   **Negativa:**
+
+        -   `Tuberculosis` 0.4 strong relationship
+
+        -   `Tempmarzo` 0.5 strong relationship
+
+        -   `BCG`
+
+-   From the scaterplots we can conclude that we have a point cloud that could be explained with a simple linear regression for the population aged 80 years and the urban area, as these variables vs. the logarithm of deaths per million inhabitant. This is also the case for the GDP variable vs. the latter. In the rest, point clouds concentrated in some quadrant are observed.
+
+-   Other interesting correlations are:
+
+    -   Tuberculosis and the temperature in March, which makes sense given that the likelihood of tuberculosis increases with colder temperatures or decreases for warmer climates.
+
+    -   March temperature and beds also show a strong and negative correlation.
+
+    -   PBI has a negative and weak correlation with immunisation policy.
+
+**Histograms**
+
+We use histograms to see the distribution of the variables that are of most interest to us, in this case we select GDP, Temperature, Beds, urban, 80 year old population and the logarithm of deaths.
+
+```{r}
+#PoblaDens, Pobla80,Urbano, l10muertes.permil,Tuberculosis,Camas, TempMarzo,PBI,muertes.permil,BCG
+
+hp <- covid %>%
+  ggplot( aes(x=Pobla80)) +
+    geom_histogram( binwidth=3, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de poblacion 80") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+
+hu <- covid %>%
+  ggplot( aes(x=Urbano)) +
+    geom_histogram( binwidth=3, fill="#9a76db", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de urbano") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+
+hpb <- covid %>%
+  ggplot( aes(x=PBI)) +
+    geom_histogram( binwidth=3, fill="#60bd88", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion del PBI") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+ht <- covid %>%
+  ggplot( aes(x=TempMarzo)) +
+    geom_histogram( binwidth=3, fill="#609ebd", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de la Temperatura en Marzo") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+ggarrange(hp,hu,hpb,ht,
+          nrow = 1,
+          ncol = 2
+          )
+```
+
+**Boxplot**
+
+```{r}
+
+ bp <- covid %>%
+  ggplot(aes(y=Pobla80)) +
+    geom_boxplot(binwidth=0.5,fill="#69b3a2", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Poblacion 80") +
+    xlab("")
+ 
+ 
+  bu <- covid %>%
+  ggplot(aes(y=Urbano)) +
+    geom_boxplot(binwidth=0.5,fill="#db769d", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Urbano") +
+    xlab("")
+ 
+   bpbi <- covid %>%
+  ggplot(aes(y=PBI)) +
+    geom_boxplot(binwidth=0.5,fill="#9a76db", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("PBI") +
+    xlab("")
+   
+  bt <- covid %>%
+  ggplot(aes(y=TempMarzo)) +
+    geom_boxplot(binwidth=0.5,fill="#bd6099", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Temperatura") +
+    xlab("")
+
+    btu <- covid %>%
+  ggplot(aes(y=Tuberculosis)) +
+    geom_boxplot(binwidth=0.5,fill="#99bd60", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Tuberculosis") +
+    xlab("")
+
+      bca <- covid %>%
+  ggplot(aes(y=Camas)) +
+    geom_boxplot(binwidth=0.5,fill="#bd9e60", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Camas") +
+    xlab("")
+
+   blm <- covid %>%
+  ggplot(aes(y=l10muertes.permil)) +
+    geom_boxplot(binwidth=0.5,fill="#bd7660", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Logaritmo Muertes") +
+    xlab("")
+
+    bpm <- covid %>%
+  ggplot(aes(y=muertes.permil)) +
+    geom_boxplot(binwidth=0.5,fill="#79ccd9", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Muertes por millón") +
+    xlab("")
+
+  
+   
+      
+ ggarrange( bp,bu,bpbi,bt,btu,bca,blm,bpm,
+            nrow = 1,
+            ncol = 2)
+
+```
+
+The variables `tuberculosis, beds and PBI` are outliers of high and positive magnitude.
+
+**Boxplot analysis for `l10deaths.permil and deaths.permil` in relation to BCGf**
+
+```{r}
+  blm <- covid %>%
+  ggplot(aes(y=l10muertes.permil)) +
+    facet_wrap(~BCGf) +
+    geom_boxplot(binwidth=0.5,fill="#bd7660", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Logaritmo Muertes") +
+    xlab("")
+
+    bpm <- covid %>%
+  ggplot(aes(y=muertes.permil)) +
+    facet_wrap(~BCGf) +
+    geom_boxplot(binwidth=0.5,fill="#79ccd9", color="#141414") +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=8)
+    ) +
+    ggtitle("Muertes por millón") +
+    xlab("")
+
+  
+      
+ ggarrange( blm,bpm,
+            nrow = 1,
+            ncol = 1)
+```
+
+**Analysis**
+
+The effects of the immunisation policy adopted can be seen in a simpler way, since the corresponding values for no immunisation are higher for deaths and lower for total immunisation. On the other hand, in the case of deaths per million, it is not so easy to differentiate the effects of the implemented policy, and this variable is more influenced by outliers.
+
+### Overall Correlation
+
+We will perform a general correlation matrix considering all variables.
+
+```{r}
+# Linda forma de visualizar la matriz de correlacion
+ggcorr(covid, method = c("everything", "pearson")) 
+```
+
+Clearly having so many variables covered in the graph does not help but it is a good way to get a quick idea.
+
+### Regression model
+
+We will consider a reduced number of variables to propose a regression model. As regressor variables we have `PoblaDens, Pobla80, Urban, Tuberculosis, Beds, TempMarch and PBI` we will use as response variable `l10deaths.permil.`
+
+*\*We generate a dataframe with the selected variables only.*
+
+```{r}
+df_covid = data.frame(PoblaDens, Pobla80,Urbano, l10muertes.permil,Tuberculosis,Camas, TempMarzo,PBI)
+df_covid
+```
+
+#### 1. Analyse the relationship between variables
+
+Although we have performed an exploratory data analysis, it is important as a first step in establishing a multiple linear model to study the relationship that exists between the variables selected above. This information is critical in identifying which may be the best predictors for the model, which variables have non-linear relationships (so cannot be included) and to identify collinearity between predictors.
+
+```{r}
+round(cor(x = df_covid, method = "pearson"), 3)
+```
+
+```{r}
+ggcorr(df_covid, method = c("everything", "pearson")) 
+```
+
+The following conclusions can be drawn from the preliminary analysis:The variables that have the strongest linear relationship with mortality are: population 80 (r= 0.68), urban (r= -0.57) and GDP (r= 0.54). Population 80 and beds are only moderately correlated (r = 0.7) so it is possibly not useful to introduce both predictors into the model. The same is true for temperature and beds. For a first linear regression model we will use the Pobla80 variable as it is highly correlated and considering the context that it is the population at highest risk for COVID-19.
+
+#### 2.Generate the model
+
+We will create a linear model considering as response variable `l10deaths.permil and regressors Pobla80-PoblaDens-Urban-Tuberculosis-Beds -TempMarch -PBI`
+
+```{r}
+
+modelo <- lm(l10muertes.permil ~ Pobla80+PoblaDens+Urbano+Tuberculosis+Camas+TempMarzo+PBI , data = df_covid )
+
+summary(modelo)
+```
+
+Preliminary analysis, this regression is able to explain 62.3% of what happens in the regression, has a small `p-value` and a `RSS of 0.476`. Our model is:
+
+$$\hat{l10muertes.pormil} = 0.59+0.20\hat{Pobla80}-0.01\hat{PoblaDens}$$ $$+0.008\hat{Urbano}-0.0005\hat{Tuberculosis}$$ $$-0.11\hat{Camas}-0.014\hat{TempMarzo}+0.006\hat{PBI}$$
+
+The intercept is of positive sign so it indicates an increasing slope, those estimators with negative sign make sense since if one has lower population density should have less risk of contact because there is less concentration of people, the same happens with the beds, more beds, more patients can be treated and fewer deaths would be generated, With temperature, considering that it is a respiratory disease, those countries that are not in winter or autumn will have fewer cases than those that are, on the other hand, a larger adult population implies a greater number of deaths because they are the risk group, and GDP, being an economic indicator, one could assume that countries with a low GDP will not have good health systems.
+
+#### 3.Identification of possible outliers or influencers
+
+```{r}
+df_covid$studentized_residual <- rstudent(modelo)
+ggplot(data = df_covid, aes(x = predict(modelo), y = abs(studentized_residual))) +
+geom_hline(yintercept = 3, color = "grey", linetype = "dashed") +
+# se identifican en rojo observaciones con residuos estandarizados absolutos > 3
+geom_point(aes(color = ifelse(abs(studentized_residual) > 3, 'red', 'black'))) +
+scale_color_identity() +
+labs(title = "Distribución de los residuos studentized",
+     x = "predicción modelo") + 
+theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+which(abs(df_covid$studentized_residual) > 3)
+```
+
+By plotting the standardised residuals and our test for outliers, we conclude that no outliers are found. However, the graph shows a slight concentration in the left corner corresponding to small values up to 0.5 of prediction and then they are scattered, and we will generate a table that allows us to quantify the influence of the observations that are significantly influential in our predictor.
+
+```{r}
+summary(influence.measures(modelo))
+```
+
+The graphical visualisation of the influences is obtained:
+
+```{r}
+influencePlot(modelo)
+```
+
+The analyses show several influential observations (position 116, 108 and 68) that exceed the limits of concern for the Leverages or Cook's Distance values. More comprehensive studies would consist of redoing the model without the observations and see the impact.the Cook's distance plots are useful to detect observations that strongly influence the fitted values of the model.the analyses show several influential observations that exceed the limits of concern for the Leverages or Cook's Distance values.
+
+*\*\*116 = Singaporem 108 = Qatar and 68 = Japan*
+
+#### Residue analysis
+
+**1- Linear relationship between the numerical predictor and the response variable**
+
+We can validate what happens with this condition by using a scatterplot between the number of deaths and the different features selected.
+
+**Population of 80**
+
+`PoblaDens+Urbano+Tuberculosis+Camas+TempMarzo+PBI`
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(Pobla80, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly concentrated between 0 and 2 of Pobla80 and between 0.5 and -05 of the standardised residuals, the variable is constant until it falls. We can say that linearity is fulfilled for the selected predictor.
+
+**Population Density**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(PoblaDens, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly concentrated in the left quadrant of the graph. We can say that linearity is not fulfilled for the selected predictor.
+
+**Urban**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(Urbano, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly randomly distributed around 0, the variable is constant We can say that linearity is fulfilled for the selected predictor.
+
+**Tuberculosis**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(Tuberculosis, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly concentrated between 0 and 100 for Tuberculosis and between 1 and -1 for the standardised residuals, the variable is constant across all values. We can say that linearity is fulfilled for the selected predictor.
+
+**Beds**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(Camas, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly between the values 0 to 5 of Camas, the variable is constant until it falls. We can say that linearity is fulfilled for the selected predictor.
+
+**Temperarture March**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(TempMarzo, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly distributed along the zero we can see as two big groups that could be a consequence of the fact that the Southern and Northern hemispheres have opposite seasons. We can say that linearity is fulfilled for the selected predictor.
+
+**PBI**
+
+```{r}
+plot1 <- ggplot(data = df_covid, aes(PBI, modelo$residuals)) +
+    geom_point() + geom_smooth(color = "firebrick") + geom_hline(yintercept = 0) +
+    theme_bw()
+
+plot1
+```
+
+The residuals are mostly concentrated between 0 and 25 of PBI and between 0.5 and -0.5 of the standardised residuals, the variable is constant until it falls as a consequence of a point. We can say that linearity is fulfilled for the selected predictor, if we consider that there are very scattered points.
+
+**2- Normal distribution of residuals**
+
+We will compare the quantiles of the observed distribution with the theoretical quantiles of a normal distribution with the same mean and standard deviation as the data.
+
+```{r}
+qqnorm(modelo$residuals)
+qqline(modelo$residuals)
+```
+
+```{r}
+ks.test(modelo$residuals,"pnorm",mean(modelo$residuals),sd(modelo$residuals))
+```
+
+The graphical analysis confirms normality, because they are mostly aligned around the straight line, with a slight "detachment" in the tails. Performing the goodness of fit test, given that my p-value is 0.89, I am able to reject my null hypothesis and affirm that they have a normal distribution.
+
+**3-Constant variance of residuals (homoscedasticity)**\
+
+We will plot the values fitted by the model and the residuals.
+
+```{r}
+ggplot(data = df_covid, aes(modelo$fitted.values, modelo$residuals)) +
+geom_point() +
+geom_smooth(color = "firebrick", se = FALSE) +
+geom_hline(yintercept = 0) +
+theme_bw()
+```
+
+```{r}
+#bptest(modelo)
+```
+
+Since the distribution of the residuals against the model fitted values are randomly distributed around zero, but egg-shaped, this is when the response variable is a proportion. What is happening is that we are violating the principle of heteroscedasticity which talks about the variance of all errors being equal. What I am going to test is that the variance of each of my errors is the same vs. the alternative hypothesis that there is a different one.
+
+```{r}
+cor.test(abs(modelo$residuals),modelo$fitted.values,method="spearman")
+```
+
+There is no problem of heterosticity since the p-value did not give such a small value.
+
+**4- Non-multicollinearity**
+
+Correlation matrix between predictors.
+
+```{r}
+corrplot(cor(dplyr::select(df_covid, PoblaDens, Pobla80,Urbano, l10muertes.permil,Tuberculosis,Camas, TempMarzo,PBI, l10muertes.permil)),
+         method = "number", tl.col = "black")
+```
+
+**5 -Inflation Variance Analysis (VIF)**
+
+```{r}
+vif(modelo)
+```
+
+There are no predictors showing very high linear correlation or variance inflation.
+
+**6- Autocorrelation**
+
+```{r}
+dwt(modelo, alternative = "two.sided")
+```
+
+No evidence of autocorrelation
+
+#### **Analysis PBI**
+
+PBI has a strong positive correlation with deaths, hospital beds and population of 80, which makes sense given that we could assume that countries with lower PBI may not have good health systems, which could lead to more deaths. We will create a series of new columns corresponding to various interactions with PBI.
+
+```{r}
+modelo_pbi1 <- lm(l10muertes.permil ~ PoblaDens+Pobla80*PBI+Urbano*PBI+Tuberculosis*PBI+PBI*Camas+TempMarzo+PBI, data = df_covid )
+
+summary(modelo_pbi1)
+
+```
+
+We can observe a slight increase in the logical $R^2$ because we add a feature. Since this is not representative for us, let's see what happens with the residuals.
+
+```{r}
+par(mfrow=c(2,2))
+plot(modelo_pbi1)
+```
+
+By interacting with the PBI, the outputs are improved and do not seem to affect waste.
+
+#### 4. Seleccion de un modelo
+
+Considering as evaluation criteria the $R^2, p-value, RSS$ and their residuals, the best model we have is the one that considers the variables without any interaction with GDP, in other words:
+
+$$\hat{l10muertes.pormil} = 0.59+0.20\hat{Pobla80}-0.01\hat{PoblaDens}$$ $$+0.008\hat{Urbano}-0.0005\hat{Tuberculosis}$$ $$-0.11\hat{Camas}-0.014\hat{TempMarzo}+0.006\hat{PBI}$$
+
+The model with all variables entered as predictors has a high $R^2$ (0.6239), it is able to explain 62.39% of the observed variability in log mortality per million population for covid-19. The $p-value$ of the model is significant ($2.2e^{-16}$) so it can be accepted that the model is not by chance, at least one of the partial regression coefficients is different from 0. Many of them are not significant, which is an indication that they might not contribute to the model.
+
+### Collinearity
+
+Several of the data that are available, because of how they were collected and what they represent, will have high collinearity. From this prior knowledge we can identify the following cases:
+
+-   Everything that represents a percentage of the population has a relationship with the total population (`PoblaData`). In turn, many of these also have a relationship between them because in some cases they are included in that percentage, as in the case of the percentage of the population aged 65 years old includes the population aged 80 years old.
+
+-   Because of the way `Pobla80` is constructed it is an average between `Female80` and `Male80`.
+
+-   Population density has to have a strong correlation with total population as it is an indicator that is constructed as total population/area.
+
+-   PBI in this case represents PPP and its construction is GDP/total number of inhabitants.
+
+-   `HipTen` per consturction is an average of `HT.women y HT.men`
+
+-   `l10muertes.permil` by construction where `deaths.permil` is the number of deaths per million inhabitants.
+
+-   `BCG`y `BCGf`represent the same thing since it is the BCG variable written as a factor.
+
+We have several ways to corroborate what we mentioned, one could be by looking at the correlation between these variables and another by generating a regression model with these predictors and observing the$R^2$.
+
+```{r}
+# Excluimos las variables categoricas
+df_covid_total = data.frame(Hombres80, Mujeres80, Pobla80, Pobla65, PoblaMid, PoblaData, PoblaDens, Mujeres, Urbano,ExpectVida, NeontlMort, DisMort, Lesion, EnfNoTrans,Tuberculosis,Diabetes, ImmunSaramp, HipTen.H, HipTen.M, BCG,Medicos,Camas,PBI,TempMarzo,l10muertes.permil,muertes.permil)
+
+df_covid_total
+```
+
+The first step in setting up a multiple linear model is to study the relationship that exists between variables. This information is critical in order to identify the best predictors for the model, and to detect collinearity between predictors. First, a linear regression model (OLS) is fitted including all variables as predictors.
+
+```{r}
+ajustels<-lm(l10muertes.permil~.,data = df_covid_total )
+summary(ajustels)
+```
+
+The R2adjustedRadjusted2 value obtained is very high (0.7871) indicating that the model is able to predict with high accuracy the covid deaths of the observations with which it has been trained. The fact that the model as a whole is significant (p-value: \< 2.2e-16), but that very few of the predictors are significant at the individual level, is indicative of possible redundancy among the predictors (collinearity).
+
+We analyse the correlation matrix
+
+```{r}
+round(cor(df_covid_total),2)
+```
+
+We can observe several cases where the correlation is of the high and almost perfect type
+
+```{r}
+ggcorr(df_covid_total, method = c("everything", "pearson")) 
+```
+
+Knowing this, we decided to eliminate the following variables:
+
+-   We are left with `Pobla80` which represents the average between women of 80 and men of 80.
+
+-   Since there is also perfect collinearity between the percentage of the population aged 80 and 65, we decided to stick with the percentage aged 80.
+
+-   The percentage of hypertension, we have to keep only the percentage of women.
+
+-   Between life expectancy, non-communicable diseases and neontmort, we are going to maintain life expectancy.
+
+The variables selected then are:
+
+```{r}
+df_covid_total = data.frame( Pobla80,PoblaMid, PoblaData, PoblaDens, Mujeres, Urbano,DisMort, Lesion,Tuberculosis,Diabetes, ImmunSaramp,HipTen.M, BCG,Medicos,Camas,PBI,TempMarzo,l10muertes.permil)
+```
+
+We re-run a model considering these variables
+
+```{r}
+ajustels<-lm(l10muertes.permil~.,data = df_covid_total )
+summary(ajustels)
+```
+
+```{r}
+XX<-model.matrix(ajustels)   #matriz de disenio
+det(solve(t(XX)%*%XX))#determinante de (X'X)^-1 
+```
+
+Variance inflation analysis
+
+```{r}
+vif(ajustels)
+```
+
+No variable exceeds 10, so there is no collinearity problem.
+
+```{r}
+dwt(ajustels, alternative = "two.sided")
+```
+
+#### **Selection of predictors**
+
+For this exercise, we will use the stepwise method, which uses mathematical criteria to decide which predictors contribute significantly to the model and in which order they are introduced. Within this method three strategies are differentiated: Forward direction, Backward direction or Dual or mixed.The stepwise method requires some mathematical criterion to determine whether the model gets better or worse with each addition or removal. There are several parameters used, including \$Cp\$ \$AIC\$, \$BIC\$ and \$R\^2adjusted\$, each with advantages and disadvantages. The Akaike(AIC) method tends to be more restrictive and introduce fewer predictors than the R2-adjusted method. For the same dataset, not all methods have to result in the same model, and in this case the mixed stepwise strategy will be used. The mathematical value used to determine the quality of the model will be Akaike(AIC). We are going to use both the logarithmic and the deaths per thousand as response variables.
+
+**Model considering l10muertes.permil**
+
+```{r}
+df_covid_l10muertes = data.frame(Pobla80,PoblaMid, PoblaData, PoblaDens, Mujeres, Urbano,DisMort, Lesion,Tuberculosis,Diabetes, ImmunSaramp,HipTen.M, BCG,Medicos,Camas,PBI,TempMarzo,l10muertes.permil)
+
+df_covid_l10muertes
+```
+
+```{r}
+modelo_l10muertes<-lm(l10muertes.permil~.,data = df_covid_l10muertes)
+summary(modelo_l10muertes)
+```
+
+The model with all variables entered as predictors has a high \$R\^2\$ (0.6495), it is able to explain 65% of the observed variability in log deaths per thousand of covid. The p-value of the model is significant (2.2e-16) so it can be accepted that the model is not by chance, at least one of the partial regression coefficients is different from 0. Many of them are not significant, which is an indication that they might not contribute to the model.
+
+```{r}
+step(object = modelo_l10muertes, direction = "both", trace = 1)
+```
+
+\
+The best model resulting from the selection process was:
+
+```{r}
+l10muertes_modelo <- (lm(formula = l10muertes.permil ~ Pobla80 + PoblaDens + Urbano + Tuberculosis + ImmunSaramp + BCG + Camas + PBI +TempMarzo, 
+    data = df_covid_l10muertes))
+summary(l10muertes_modelo)
+```
+
+El mejor modelo resultante del proceso de selección fue:
+
+```{r}
+confint(lm(formula = l10muertes.permil ~ Pobla80 + PoblaDens + Urbano + Tuberculosis + ImmunSaramp + BCG + Camas + PBI +TempMarzo, 
+    data = df_covid_l10muertes))
+```
+
+Each of the slopes of a multiple linear regression model (partial regression coefficients of the predictors) is defined as follows: If all other variables are held constant, for each unit increase in the predictor in question, the variable (Y) varies on average by as many units as the slope indicates. For this example, for each unit increase in the predictor GDP, log deaths per thousand covid increases on average by 0.065 units, with all other predictors held constant.
+
+**Model considering deaths.permil**
+
+```{r}
+df_covid_muertes.permil = data.frame(Pobla80,PoblaMid, PoblaData, PoblaDens, Mujeres, Urbano,DisMort, Lesion,Tuberculosis,Diabetes, ImmunSaramp,HipTen.M, BCG,Medicos,Camas,PBI,TempMarzo,muertes.permil)
+
+df_covid_muertes.permil
+```
+
+```{r}
+modelo_muertes.permil<-lm(muertes.permil~.,data = df_covid_muertes.permil)
+summary(modelo_muertes.permil)
+```
+
+The model with all variables entered as predictors has a high \$R\^2\$ (0.5449), it is able to explain 55% of the observed variability in log deaths per thousand covid. The p-value of the model is significant (6.55e-13) so it can be accepted that the model is not by chance, at least one of the partial regression coefficients is different from 0. Many of them are not significant, which is an indication that they might not contribute to the model.
+
+```{r}
+step(object = modelo_muertes.permil, direction = "both", trace = 1)
+```
+
+The best model resulting from the selection process was:
+
+```{r}
+muertes.permil_modelo <- (lm(formula = muertes.permil ~ Pobla80 + Diabetes + BCG + Camas + PBI, data = df_covid_muertes.permil))
+summary(muertes.permil_modelo)
+```
+
+It is recommended to show the confidence interval for each of the partial regression coefficients:
+
+```{r}
+confint(lm(formula = muertes.permil ~ Pobla80 + Diabetes + BCG + Camas + 
+    PBI, data = df_covid_muertes.permil))
+```
+
+Conclusion of obtaining the best models for both variables, it is better to use the one that considers deaths as the response variable in logarithmic form because it has a higher \$R\^2\$, a lower \$p-value\$ and \$RSE\$, hence its confidence intervals are shorter as well.
+
+#### Comparison of PBI model vs. final model
+
+Considering as evaluation criteria the outputs obtained from the models and their residual analysis, the final model is better because it complies with the "mandatory" principles for a linear regression and has better output values. Since both models are regressions, we could use the Mean Square Error (MSE) as a metric, but for this we would have to divide our sample into test and train and generate the models again.
+
+We split the dataset into train and test.
+
+```{r}
+split <- sample.split(df_covid_total$l10muertes.permil, SplitRatio = 2/3)
+training_set <- subset(df_covid_total, split==T)
+test_set     <- subset(df_covid_total, split==F)
+training_set
+```
+
+We re-generate our models but using the `training_set`
+
+```{r}
+#Modelo PBI
+modelo_pbi2 <- lm(l10muertes.permil ~ PoblaDens+Pobla80*PBI+Urbano*PBI+Tuberculosis*PBI+PBI*Camas+TempMarzo+PBI, data = training_set )
+summary(modelo_pbi2)
+```
+
+```{r}
+# Predicciones de entrenamiento
+
+predicciones_train <- predict(modelo_pbi2, newdata = training_set)
+
+# MSE de entrenamiento
+
+training_mse <- mean((predicciones_train - training_set$l10muertes.permil)^2)
+paste("Error (mse) de entrenamiento:", training_mse)
+```
+
+```{r}
+# Predicciones de test
+predicciones_test <- predict(modelo_pbi2, newdata = test_set)
+
+# MSE de test
+
+test_mse_ols <- mean((predicciones_test - test_set$l10muertes.permil)^2)
+paste("Error (mse) de test:", test_mse_ols)
+```
+
+```{r}
+#Modelo final
+l10muertes_modelo_2 <- (lm(formula = l10muertes.permil ~ Pobla80 + PoblaDens + Urbano + Tuberculosis + ImmunSaramp + BCG + Camas + PBI +TempMarzo,  data = training_set))
+summary(l10muertes_modelo_2)
+```
+
+```{r}
+# Predicciones de entrenamiento
+
+predicciones_train <- predict(l10muertes_modelo_2, newdata = training_set)
+
+# MSE de entrenamiento
+
+training_mse <- mean((predicciones_train - training_set$l10muertes.permil)^2)
+paste("Error (mse) de entrenamiento:", training_mse)
+```
+
+```{r}
+# Predicciones de test
+predicciones_test <- predict(l10muertes_modelo_2, newdata = test_set)
+
+# MSE de test
+
+test_mse_step <- mean((predicciones_test - test_set$l10muertes.permil)^2)
+paste("Error (mse) de test:", test_mse_step)
+```
+
+Comparación
+
+```{r}
+df_comparacion <- data.frame(
+                    modelo = c("ols", "Stepwise"),
+                    mse    = c(test_mse_ols,test_mse_step)
+)
+
+ggplot(data = df_comparacion, aes(x = modelo, y = mse)) +
+  geom_col(width = 0.5) +
+  geom_text(aes(label = round(mse, 2)), vjust = -0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Practically the models are the same, the difference in the MSE is small, the stepwise model is smaller, and taking into account the study of residuals, the final model obtained is preferable.
+
+### Recommendations
+
+Final Model
+
+$$\hat{l10muertes.pormil} = 1.58+0.18\hat{Pobla80}-0.0004\hat{Tuber}$$ $$-0.007\hat{Urbano}-0.005\hat{ImmunSaramp}$$ $$-0.08\hat{Camas}-0.01\hat{TempMarzo}+0.007\hat{PBI}$$ $$+0.02\hat{ExpectVida}-0.012\hat{PoblaDens}-0.54\hat{BCG}$$
+
+Taking into account the model, the context of when the data was collected and the main objective of the curve, the recommendations that can be made are that:
+
+The population over 80 years of age is the most vulnerable, so extreme care measures are recommended, the use of a mouthpiece and hand cleaning, reducing the number of trips (try to do so when the flow of people is lower and the temperature is high in winter and moderate in summer).
+
+Incorporate beds and doctors into the health system, so it could be decided that residents or recently graduated doctors who have not started their residency should collaborate in other areas by training them. Select doctors between 27 and 50 years of age who can collaborate by training them.
+
+Due to the possible exhaustion that this can generate in the specialists, I would include psychological support and try to find a way to ensure that when the system is not at its peak, they have more rest. Given that there are studies that show that health is a combination of the physical and mental.
+
+In countries where the temperature is not too cold, I would recommend that there is more freedom of movement, mainly to avoid the development of other pathologies caused by confinement and lack of socialisation.
+
+En los países donde la temperatura no es demasiado fría, recomendaría que hubiera más libertad de movimientos, sobre todo para evitar el desarrollo de otras patologías causadas por el confinamiento y la falta de socialización.
+
+Countries with low PBIs that cannot afford capital to purchase materials or generate more doctors will have to opt for stricter measures and seek economic support, because their economies may suffer.

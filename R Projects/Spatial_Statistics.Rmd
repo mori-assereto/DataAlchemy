@@ -1,0 +1,541 @@
+---
+title: "Spatial Statistics"
+author: "Mora Assereto Farroni"
+date: "2023-07-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+library(geoR)
+library(geoR,lib.loc="PATH_TO_geoR")
+library(sp)
+library(sf)
+library(tmap)
+#> Error : invalid version specification '1,5'
+library(e1071)
+library(spdep)
+library(gstat)
+library(caret)
+library(nlme)
+library(ade4)
+```
+
+# Context
+
+This dataset contains the magnesium content in the 20-40 cm soil layer at 178 locations within a given study area divided into three sub-areas. The elevation at each location was also recorded. The first region is usually flooded during the rainy season and is not used as an experimental area. The calcium levels would represent the natural content in the region. The second region has received fertiliser some time ago and is typically occupied by rice fields. The third region has recently received fertiliser and is often used as an experimental area.
+
+[**Format**]{.underline}
+
+The original dataset is a data frame with 178 observations and 10 variables, of which only the following are considered for this work:
+
+-   **east** east-west coordinates in metres
+
+-   **north** north-south coordinates in metres
+
+-   **mg2040** calcium content in the soil layer of 20-40cm, measured in mmolc/dm3
+
+**This data is available in the geoR package** (Paulo J. Ribeiro Jr and Peter J. Diggle (2016)).
+
+To perform the exploratory analyses to follow, we will use the geoR package and initially we will need to create a geodata object, as follows.
+
+# Data collection
+
+We import the data into R
+
+```{r}
+datos <- read.csv("~/Regresion Avanzada/Grupo10.csv", header=TRUE)
+View(datos)
+
+```
+
+```{r}
+# Show in a compact form the structure of an arbitrary R object
+str(datos)  
+```
+
+```{r}
+head(datos)
+```
+
+```{r}
+class(datos)
+```
+
+Transform the data set into a geodata object
+
+```{r}
+datos_geo <- as.geodata(datos, coords.col=2:3, data.col=4)
+```
+
+```{r}
+class(datos_geo)
+```
+
+To make the analysis of spatial data more practical, it is common to transform the geographic coordinate system into a Cartesian coordinate system, such as the UTM projection system. This allows distances between sites to be expressed in metres instead of degrees, which facilitates the analysis. Therefore, the first step in the analysis of spatial data would be to convert the geographic coordinates into Cartesian coordinates (UTM), in this case it is not necessary since the variables north and east representing the coordinates are expressed in metres.
+
+# Exploratory Spatial Analysis
+
+In the exploratory analysis of geostatistical data it is important to explore the distribution of the variable. This can be done using descriptive statistics and frequency distribution plots. If the data are assumed to have a normal distribution, these measures can help to verify the assumptions. A symmetrical, normal-like distribution occurs when the mean and median are nearly equal and the skewness coefficient is less than 1. The distribution of the variable can also help in the cleaning of rare data.
+
+Brief descriptive summary of data
+
+```{r}
+# Gives a quick summary of the loaded geodata object.
+summary(datos_geo)
+```
+
+We plot the values in spatial positions (distinguishing according to quartiles), the data against the coordinates and a histogram of the data. Scatter plots of the data against the coordinates can help us determine if there is a trend.
+
+```{r}
+plot(datos_geo)
+```
+
+We generate a graph with the data positions (and by default with the size of the dots proportional to the value):
+
+```{r}
+ points(datos_geo, col = "gray", pt.divide = "equal")
+```
+
+### Transformation
+
+```{r}
+datos_sf <- st_as_sf(datos, coords=c("east","north"), 
+                     crs=32721)
+```
+
+```{r}
+head(datos_sf)
+```
+
+## Removal of *outliers* e *inliers*
+
+The `hist()` and `boxplot()` functions perform histogram and box-plot plotting, respectively. Their multiple arguments allow editing of each plot
+
+```{r}
+par(mfrow = c(1, 2))
+hist(
+  datos_sf$mg2040,
+  col = 'grey',
+  nclass = 20,
+  main = "Histogram",
+  ylab = 'Relativ Frequency',
+  xlab = 'Magnesium Content (mmolc/dm3)'
+)
+
+boxplot(
+  datos_sf$mg2040,
+  col = 'grey',
+  ylab = 'Magnesium Content (mmolc/dm3)',
+  main = "Box-Plot",
+  ylim = c(0, 50)
+)
+```
+
+The `skewness()` function of the `e1071` package allows the calculation of the skewness coefficient. There are 3 formulas for its calculation (by default it uses type 3)
+
+```{r}
+skewness(datos_sf$mg2040)
+```
+
+The histogram shows that the data have a distribution similar to a normal distribution. There is no skewness to any particular side, but a uniform distribution, which can also be seen in the statistics with the skewness coefficient of 0.109.
+
+The following instructions calculate and create objects for the mean, the SD and the upper (mean + 3 SD) and lower limits (mean - 3 SD) with which outliers can be detected and residual values can be eliminated if necessary.
+
+```{r}
+Media <- mean(datos_sf$mg2040)
+DE <- sd(datos_sf$mg2040)
+LI <- Media-3*DE
+LS <- Media+3*DE
+```
+
+```{r}
+# Range of outliers values
+(datos_sf$mg2040 > LS | 
+           datos_sf$mg2040 < LI)
+```
+
+As there is no value within this range, no outlier elimination is necessary.
+
+#### Inliers Detection
+
+The identification and elimination of *inliers* requires the creation of a spatial weighting matrix. The `dnearneigh()` function is used to identify the neighbourhood of each site. This requires the calculation of the spatial distance between points using the `$geom` syntax which allows access to the coordinates of the `data_sf` object. In this example, neighbouring data are considered to be those that are at a *Euclidean distance of 0 to 100m*. The `nb2listw()` function transforms the `neighbourhood` object containing the distances to a matrix of standardised row weights `(style = "W")`. This object is called `weights_sp`. To generate the matrix of spatial weights it is necessary that all points have at least one neighbour, otherwise the `nb2listw()` function generates an error warning of this fact.
+
+```{r}
+# 8345 is to make the distance north and east squared root would be the maximum value
+vecindarios <- dnearneigh(datos_sf$geom,
+                          d1 = 0, d2 = 100)
+
+# Shows the number of neighbours for the position
+card(vecindarios)
+
+# It summarises all values
+summary(vecindarios)
+```
+
+```{r}
+pesos_sp <- nb2listw(vecindarios,
+                     style = "W")
+```
+
+The `localmoran()` function calculates the local Moran index that allows identifying potential spatial *outliers*. The information concerning the value of the local Moran index of each point is in column `Ii` while its statistical significance is in column `Pr(z < 0)`.
+
+```{r}
+moranl <-
+  localmoran(datos_sf$mg2040,
+             pesos_sp,
+             alternative = "less")
+head(moranl)
+```
+
+```{r}
+moranp <-
+  moran.plot(
+    datos_sf$mg2040,
+    col = 3,
+    pesos_sp,
+    labels = F,
+    quiet = T,
+    xlab = "Contenido Magnesio",
+    ylab = "Contenido Magnesio Spatially Lagged"
+  )
+```
+
+The object `moranp` is printed in order to visualise the potentially influential points and their diagnostic statistics in a table. Data with \* in the inf column are considered as influential and therefore possible spatial *outlier*.
+
+```{r}
+summary(moranp)
+```
+
+From the `moranp` object, a matrix of logical values (true/false) can be extracted for the diagnostic statistics that identify a point as influential or not.
+
+```{r}
+influ <- moranp$is_inf
+head(influ)
+
+```
+
+In the following statement, the values of the `moranp` and `influ` objects, which have information to detect the spatial outliers detected with the local Moran index and Moran graph, respectively, are added to the `data_sf` object.
+
+```{r}
+datos_sf_1 <- cbind(datos_sf, moranl, influ)
+```
+
+We then proceed to eliminate data with negative Local Moran Index and statistically significant (p\<0.05). The `subset()` function selects data that meet a certain logical condition. The logical operator or tells it to extract the data that meet one of the two conditions. The new object is named`data_sf_2`. In addition, a new object is created that will have the data that has been removed in this process (`inliers_ml`).
+
+```{r}
+datos_sf_2 <-
+  subset(datos_sf_1, 
+         datos_sf_1[["Ii"]] >= 0 | 
+           datos_sf_1[["Pr.z...E.Ii.."]] > 0.05)
+inliers_ml <-
+  subset(datos_sf_1, 
+         datos_sf_1[["Ii"]] < 0 &
+           datos_sf_1[["Pr.z...E.Ii.."]] < 0.05)
+```
+
+```{r}
+summary(datos_sf_2$mg2040)
+
+skewness(datos_sf_2$mg2040)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+hist(
+  datos_sf_2$mg2040,
+  col = 'grey',
+  nclass = 20,
+  main = "Histograma",
+  ylab = 'Frecuencia Relativa',
+  xlab = 'Contenido Magnesio (mmolc/dm3)'
+)
+boxplot(
+  datos_sf_2$mg2040,
+  col = 'grey',
+  ylab = 'Contenido Magnesio (mmolc/dm3)',
+  main = "Box-Plot",
+  ylim = c(0, 50)
+)
+```
+
+After identifying and eliminating the inliers detected with Moran's index and subsequently with Moran's graph, the new database presents 166 cases, i.e. 12 cases (6.7% of the data) were eliminated with respect to the database without outliers.
+
+The descriptive statistics of the cleaned data show an improvement in the skewness coefficient (-0.19), which is reflected in the histogram and box-plot.
+
+## Moran Index
+
+For the conformation of the spatial weighting matrix, the neighbourhoods of each site were defined by means of a connection network constructed on the basis of Euclidean distance. Neighbouring sites were considered to be contiguous sites located up to 100 m apart. The procedure is similar to the one used for the calculation of the local Moran index. In this case the argument `zero.policy=T` is added inside the function `nb2listw()` and `moran.mc()`. This allows the spatial weights matrix to be generated without the constraint that all points have at least one neighbouring datum.
+
+```{r}
+vecindarios <- dnearneigh(datos_sf_2$geom, 
+                          0, 100)
+pesos_sp <- nb2listw(vecindarios, 
+                     style = "W", 
+                     zero.policy = TRUE)
+```
+
+To calculate the Moran Index and determine its statistical significance by Monte Carlo simulation, `moran.mc()` is used. The variable under study, the list of spatial weights and the number of simulations must be specified.
+
+```{r}
+i.moran <-
+  moran.mc(
+    datos_sf_2$mg2040,
+    listw = pesos_sp,
+    nsim = 999,
+    zero.policy = T
+  )
+i.moran
+
+
+```
+
+These results allow us to conclude that there is positive spatial autocorrelation (0.37802) and that it is statistically significant (p=0.001).
+
+## Geary Index
+
+```{r}
+geary.test(datos_sf_2$mg2040, listw = pesos_sp)
+```
+
+The Geary C index is a measure of spatial autocorrelation that is commonly used in spatial and spatial pattern analysis. The result shows that the Geary C value calculated for the data is significantly lower than the expected value (1.000000000), indicating strong spatial autocorrelation in the data.
+
+The Geary C value is 0.612803101, suggesting that similar values are clustered together in space, while dissimilar values are more dispersed.The Geary C standard deviation statistic (8.6896) is high and the p-value is extremely low (\<2.2e-16), indicating that the probability of obtaining such a low Geary C value by chance is extremely low.
+
+Therefore, the null hypothesis that there is no spatial autocorrelation in the data is rejected and the alternative hypothesis that there is significant spatial autocorrelation in the data is accepted.In summary, the Geary C index result suggests that similar values are clustered together in space and that there is strong spatial autocorrelation in the data.
+
+## Analysis based on semi-variograms
+
+Empirical semivariograms can be obtained using the `variogram()` function.
+
+### Cloud variogram
+
+```{r}
+v <- variogram(mg2040~ 1, 
+                datos_sf_2, 
+               cloud=T, 
+               cutoff=700)
+plot(v)
+```
+
+### Variogram
+
+```{r}
+semiv_emp <- variogram( mg2040~ 1, 
+                       datos_sf_2, 
+                       cutoff = 600)
+head(semiv_emp)
+```
+
+```{r}
+plot(semiv_emp,
+     main = "Contenido Magnesio (mmolc/dm3)",
+     xlab = "Distancia",
+     ylab = "Semivarianza")
+```
+
+In the above case, the formula used (mg2040\~1) assumes that the process is stationary. A theoretical semivariogram model is then fitted to the empirical semivariogram
+
+### Spherical
+
+```{r}
+mod_esf <- fit.variogram(
+  semiv_emp,
+  vgm(0.6, "Sph", 200, 0.2))
+mod_esf
+
+```
+
+```{r}
+plot(semiv_emp,
+     mod_esf,
+     main = "Contenido Magnesio (mmolc/dm3)",
+     xlab = "Distancia",
+     ylab = "Semivarianza")
+```
+
+The best fitting model will be the one with the lowest SCE. The `attr()` function returns attributes of an object and can be used to query the SCE of the fitted model.
+
+```{r}
+attr(mod_esf, 'SSErr')
+```
+
+### Exponential
+
+```{r}
+mod_exp <- fit.variogram(
+  semiv_emp, 
+  vgm(0.6, "Exp", 200, 0.2))
+mod_exp
+```
+
+```{r}
+attr(mod_exp, 'SSErr')
+```
+
+```{r}
+plot(semiv_emp,
+     mod_exp,
+     main = "Contenido Magnesio (mmolc/dm3)",
+     xlab = "Distancia",
+     ylab = "Semivarianza")
+```
+
+```{r}
+vgLine <- rbind(
+  cbind(
+    variogramLine(
+      mod_exp, maxdist = max(semiv_emp$dist)),
+    id = "Exponencial"),
+  cbind(
+    variogramLine(
+      mod_esf, maxdist = max(semiv_emp$dist)),
+    id = "Esférico")
+  )
+
+
+ggplot(semiv_emp, aes(x = dist, y = gamma, 
+                      color = id)) +
+  geom_line(data = vgLine) +
+  geom_point() +
+  labs(
+    title = "Semivariograma experimental
+    y teórico ajustado") +
+  xlab("Distancia") +
+  ylab("Semivarianza") +
+  scale_color_discrete(
+    name = "Modelo",
+    labels = c("Esférico", 
+               "Exponencial", 
+               "Experimental"))
+```
+
+```{r}
+modelos <- fit.variogram(semiv_emp, 
+                         vgm(c("Exp", "Sph" ,"Gau" ,"Mat")))
+modelos
+```
+
+```{r}
+plot(semiv_emp,modelos)
+```
+
+```{r}
+attr(modelos, 'SSErr')
+```
+
+## Spatial Prediction
+
+Spatial prediction, i.e. predicting values of the variable at sites in the spatial field where no observations exist, is usually done by the kriging method based on the fitted semivariogram. Kriging provides the best unbiased linear estimator of the expected value for the site and an estimation error known as kriging variance. This variance depends on the fitted semivariogram model and the location in space of the observed data since it is the observed data at different sites that provide information to approximate the value at the data-free site.
+
+```{r}
+limites <- read.csv("~/Regresion Avanzada/borders.csv", header=TRUE)
+View(limites)
+head(limites)
+```
+
+```{r}
+grid <- pred_grid(limites, by = 10)
+grid <- polygrid(grid, bor = limites)
+
+names(grid) <- c("x", "y")
+grid <- st_as_sf(grid, coords = c("x", "y"),
+                 crs = 32721)
+plot(grid)
+```
+
+In summary, these steps allow a regular grid of points within a given polygon to be generated and transformed into an object that can be used in spatial statistical analysis. The krige() function of the gstat package is used to perform kriging interpolation and conditional simulations with different prediction methods. In this case, ordinary kriging interpolation with the matern semivariogram model estimated with classical geostatistics is used. The function takes as arguments the formula to specify the stationarity of the process, the database, the object for prediction, and the information from the fitted theoretical semivariogram model. The optional arguments nmin and nmax allow the interpolation to be performed in a local context.
+
+```{r}
+# Kriging Ordinario
+kriging_o <-
+  krige(
+    mg2040 ~ 1,
+    datos_sf_2,
+    st_as_sf(grid),
+    nmin = 7,
+    nmax = 25,
+    model = modelos
+  ) 
+```
+
+```{r}
+#A continuación, se realiza la visualización de la predicción y su varianza.
+predK_otm <- tm_shape(kriging_o) +
+  tm_dots("var1.pred", style = "cont",
+          title = "Predicción")
+varK_otm <-  tm_shape(kriging_o) +
+  tm_dots("var1.var", style = "cont",
+          title = "Varianza")
+
+tmap_arrange(predK_otm, varK_otm)
+```
+
+### Cross Validation
+
+K-fold cross-validation is a process used to assess the accuracy of an interpolation model. In this section we will perform the following steps:
+
+1.  Perform k-fold cross-validation using the krige.cv() function of the gstat package.
+
+2.  Use the formula arguments (mg2040\~1, which specifies that it is a stationary process), the database (data_sf_2) and the fitted theoretical semivariogram model (models) in the krige.cv() function.
+
+3.  Define the number of groups (k) into which the database is to be divided using the nfold argument.
+
+4.  Set the seed using the set.seed() function to obtain repeatable results.
+
+5.  Calculate summary statistics such as mean error (ME), mean squared error (MSE), mean squared deviation ratio (MSDR), root mean squared error (RMSE), RMSE relative to the mean of the observed (RMSE_rel) and the linear correlation between observed vs. predicted.
+
+6.  Use these summary statistics to evaluate the performance of the kriging interpolation model.
+
+7.  Generate a correlation graph between observed and predicted to visualise the quality of the model fit.
+
+#### Perform cross-validation, k-selection and kriging writing
+
+```{r}
+set.seed(17)
+valcru <-
+  krige.cv(
+    mg2040 ~ 1,
+    datos_sf_2,
+    modelos,
+    nfold = 10,
+    nmin = 7,
+    nmax = 25
+  )
+```
+
+#### Calculating summary statistics and predictions
+
+```{r}
+ME <- mean(valcru$residual)
+MSE <- mean(valcru$residual ^ 2)
+MSDR <- mean(valcru$zscore ^ 2)
+RMSE <- sqrt(mean(valcru$residual ^ 2))
+RMSE_rel <- 
+  sqrt(mean(valcru$residual ^ 2)) / 
+  mean(valcru$observed) * 100
+r <- cor(valcru$observed, 
+         valcru$observed - valcru$residual)
+
+tabla <- data.frame(ME, MSE, RMSE, 
+                    RMSE_rel, MSDR, r)
+tabla
+
+plot(
+  valcru$observed,
+  valcru$observed - valcru$residual,
+  xlab = "Observados",
+  ylab = "Predichos"
+)
+```
+
+# Improvements
+
+-   Apply normality test
+
+-   Empirical variogram and isotropy

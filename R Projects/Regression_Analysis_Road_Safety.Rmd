@@ -1,0 +1,1351 @@
+---
+title: "Regression Analysis Road Safety"
+author: "Mora Assereto Farroni"
+date: "2023-07-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Regression Analysis Road Safety 
+
+**Objective:** The aim of the work is to find urban characteristics to determine the vulnerability of road users. In this way, the aim is to evaluate which public policies are most effective in reducing fatalities and violent traffic accidents to zero.
+
+## Data understanding
+
+The model is based on a number of variables Independent variables are:
+
+-   `DenPob`: population density (population/km2)
+
+-   `ArCiclista`: ratio between the total area for cycling and the total area for driving.
+
+-   `ArBajaVel`: relation between the total limited area for low speed and the total area for driving.
+
+-   `PMPeatones`: modal share for walking(%).
+
+-   `PMCiclistas`: modal share for cyclists (%).
+
+-   `PMTPublico`: modal share for public transport (%).
+
+-   `PMVMotor`: modal share for motor vehicles (%)
+
+-   `Temp`: annual average temperature (C).
+
+-   `Precipitacion`: annual average temperature (C).
+
+-   `PBI`: average gross domestic product per capita (EUR).
+
+On the other hand, as **response** variables we have the MDS rate that cause crashes from vehicle A to B (A → B), we note AB.
+
+-   `PeatAuto`: Pedestrian → Car or Taxi.
+
+-   `CicAuto`: Cyclist → Car or Taxi.
+
+-   `V2RMSM` : Cyclist → Car or Taxi.
+
+-   `V2RMAuto` Motorised two-wheeled vehicle → Car or Taxi.
+
+-   `AutoSM` Car or Taxi → yes themselves.
+
+-   `AutoAuto` Car or Taxi → Car or Taxi.
+
+### Libraries
+
+```{r}
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(tidyverse)
+library(hrbrthemes)
+library(ggpubr)
+library(cowplot)
+library(caTools)
+library(corrplot)
+library(Hmisc)
+library(multcomp)
+library(readxl)
+library(gmodels)
+library(ggthemes)
+library(devtools)
+library(car)
+library(leaflet)
+library(psych)
+library(skimr)
+library(DataExplorer)
+library(scales)
+library(corrr)
+library(glmnet)
+library(pls)
+library(readxl)
+```
+
+### Data collection
+
+```{r}
+segvial <- read_excel("SegVial.xlsx")
+segvial
+attach(segvial)
+```
+
+### Exploring data
+
+```{r}
+glimpse(segvial)
+```
+
+```{r}
+describe(segvial)
+```
+
+```{r}
+summary = summary(segvial)
+summary
+```
+
+We have 20 columns and 24 rows, of which 3 are categorical and the rest numerical, however they are listed as varchar type, so we will transform them to numerical. The indices show a large difference in magnitude between their mean, minimum and maximum. The rest of the variables seem to have similar distributions.
+
+```{r}
+segvial <- transform(segvial,
+                     ArCiclista = as.numeric(ArCiclista),
+                     ArBajaVel = as.numeric(ArBajaVel),
+                     PMPeatones = as.numeric(PMPeatones),
+                     PMCiclistas = as.numeric(PMCiclistas),
+                     PMTPublico = as.numeric(PMTPublico),
+                     PMVMotor = as.numeric(PMVMotor),
+                     Precipitacion = as.numeric(Precipitacion),
+                     Temp = as.numeric(Temp))
+segvial
+```
+
+#### Categorising variables
+
+The variables can be categorised into four categories:
+
+-   **Metrics** see all MDS indicators
+
+-   **Environmental** we consider environmental issues such as temprature and rainfall
+
+-   **Demographics** is relative to population
+
+-   **Geographical** are those that represent a country or city
+
+-   **Urban features** are those relating to areas or space of the different road agents.
+
+#### Curiosities
+
+The objective is to find vulnerability or certain characteristics that will allow us to take road safety measures, so the following concerns arise and we will seek to resolve them:
+
+-   In cities where it rains more, are there more accidents both by themselves and among others?
+
+-   Cities with less space for cyclists have more accidents
+
+-   Las ciudades con menos espacio para los ciclistas registran más accidentes
+
+-   Is there any relation with the area or participation and its accidents?
+
+-   Those cities that have higher low speed zones than indices have a lower speed zone.
+
+We will seek to address all these concerns graphically.
+
+#### Graphic analysis
+
+**Rain vs MSD**
+
+```{r}
+ggplot(segvial, aes(x = PeatAuto, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = CicAuto, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMSM, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMAuto, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoSM, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoAuto, y = Precipitacion, color = Precipitacion)) +
+  geom_point()
+```
+
+No pareciera que aquellos lugares donde más llueve presenten los mayores indices.
+
+**Ciudades vs espacio ciclista**
+
+```{r}
+ggplot(segvial, aes(x = CicAuto, y = ArCiclista, color = Pais)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = CicAuto, y = PMCiclistas, color = Pais)) +
+  geom_point()
+```
+
+It does not seem that particular clusters of a single country can be identified if we can observe that there is one value for the UK CicAuto index whose magnitude is well above the rest.
+
+**Temperatures vs Bicycle or pedestrian accidents**
+
+```{r}
+ggplot(segvial, aes(x = Temp, y = CicAuto)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = Temp, y = PeatAuto)) +
+  geom_point()
+```
+
+Pareciera que si la temperatura es agradable la mayor cantidad del año se produzcan más accidentes en bicicleta o peatonal, lo cual hae sentido si pensamos que la gente saldría más de su hogar a realizar alguna actividad.
+
+**Participacion vs indice**
+
+```{r}
+ggplot(segvial, aes(x = PeatAuto, y = PMVMotor, color = PMVMotor)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = CicAuto, y = PMCiclistas, color = PMCiclistas)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMSM, y = PMVMotor, color = PMVMotor)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMAuto, y = PMVMotor, color = PMVMotor)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoSM, y = PMVMotor, color = PMVMotor)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoAuto, y = PMVMotor, color = PMVMotor)) +
+  geom_point()
+```
+
+La participación que tiene el espacio si se trata de un vehiculo, peaton o ciclista pareciera que tiene cierta inferencia en los indices de accidentes, donde en algunos casos se puede ver que a mayor cantidad es más grande el indice.
+
+**Zona de baja velocidad vs indice**
+
+```{r}
+ggplot(segvial, aes(x = PeatAuto, y = ArBajaVel, color = ArBajaVel)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = CicAuto, y = ArBajaVel, color = ArBajaVel)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMSM, y = ArBajaVel, color = ArBajaVel)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = V2RMAuto, y = ArBajaVel, color = ArBajaVel)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoSM, y = ArBajaVel, color = ArBajaVel)) +
+  geom_point()
+```
+
+```{r}
+ggplot(segvial, aes(x = AutoAuto, y = ArBajaVel, color = Precipitacion)) +
+  geom_point()
+```
+
+It can be seen mainly in those graphs showing vehicle rates that there are higher rates for some cities, and also that those cities that have higher percentages of low speed zones have lower pedestrian and cycling rates.
+
+**Histograms**
+
+We use histograms to see the distribution of the response variables.
+
+```{r}
+# PeatAuto CicAuto V2RMSM V2RMAut AutoSM AutoAuto
+hp <- segvial %>%
+  ggplot( aes(x=PeatAuto)) +
+    geom_histogram( binwidth=3, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de PeatAuto") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+
+hc <- segvial %>%
+  ggplot( aes(x=CicAuto)) +
+    geom_histogram( binwidth=3, fill="#9a76db", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de CicAuto") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+
+hv2rm <- segvial %>%
+  ggplot( aes(x=V2RMSM)) +
+    geom_histogram( binwidth=3, fill="#60bd88", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion del V2RMSM") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+hv2a <- segvial %>%
+  ggplot( aes(x=V2RMAuto)) +
+    geom_histogram( binwidth=3, fill="#609ebd", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de V2RMAuto") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+has <- segvial %>%
+  ggplot( aes(x=AutoSM)) +
+    geom_histogram( binwidth=3, fill="#609ebd", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de AutoSM") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+haa <- segvial %>%
+  ggplot( aes(x=AutoAuto)) +
+    geom_histogram( binwidth=3, fill="#609ebd", color="#e9ecef", alpha=0.9) +
+    ggtitle("Distribucion de AutoAuto") +
+    theme_ipsum() +
+    theme(
+      plot.title = element_text(size=8)
+    )
+
+ggarrange(hp,hc,hv2rm,hv2a,has,haa,
+          nrow = 1,
+          ncol = 2
+          )
+```
+
+#### Overall Correlation
+
+We will perform a general correlation matrix considering all variables.
+
+```{r}
+ggcorr(segvial, method = c("everything", "pearson"))
+```
+
+There are several strong correlations that could indicate possible collieanity.
+
+#### Standardisation of variables
+
+##### Variables response
+
+```{r}
+segvial$stPeatAuto <- PeatAuto/Poblacion*(10^6)
+segvial$stCicAuto <- CicAuto/Poblacion*(10^6)
+segvial$stV2RMSM <- V2RMSM/Poblacion*(10^6)
+segvial$stV2RMAuto <- V2RMAuto/Poblacion*(10^6)
+segvial$stAutoSM <- AutoSM/Poblacion*(10^6)
+segvial$stAutoAuto <- AutoAuto/Poblacion*(10^6)
+segvial
+```
+
+##### Variables regresoras
+
+-   `DenPob,ArCiclista,ArBajaVel,PMPeatones,PMCiclistas,PMTPublico,PMVMotor,Temp,Precipitacion,PBI`
+
+```{r}
+df_segvial <- segvial%>% mutate_at (c ('Precipitacion', 'PBI', 'Temp','PMVMotor','PMTPublico','PMCiclistas','PMPeatones','ArBajaVel','ArCiclista','DenPob'), ~ ( scale (.)%>% as.vector ))
+df_segvial
+```
+
+### Modeling
+
+#### Data
+
+In order to assess the predictive ability of each model, the available observations are divided into two groups: a training group and a test group, for each response variable.
+
+**PeatAuto**
+
+```{r}
+split <- sample.split(df_segvial$stPeatAuto, SplitRatio = 2/3)
+training_set_pa <- subset(df_segvial, split==T)
+test_set_pa    <- subset(df_segvial, split==F)
+training_set_pa
+```
+
+**CicAuto**
+
+```{r}
+split <- sample.split(df_segvial$stCicAuto, SplitRatio = 2/3)
+training_set_ca <- subset(df_segvial, split==T)
+test_set_ca    <- subset(df_segvial, split==F)
+training_set_ca
+```
+
+**AutoSM**
+
+```{r}
+split <- sample.split(df_segvial$stAutoSM , SplitRatio = 2/3)
+training_set_as <- subset(df_segvial, split==T)
+test_set_as    <- subset(df_segvial, split==F)
+training_set_as
+```
+
+**AutoAuto**
+
+```{r}
+split <- sample.split(df_segvial$stAutoAuto, SplitRatio = 2/3)
+training_set_aa <- subset(df_segvial, split==T)
+test_set_aa    <- subset(df_segvial, split==F)
+training_set_aa
+```
+
+**V2RMSM**
+
+```{r}
+split <- sample.split(df_segvial$stV2RMSM , SplitRatio = 2/3)
+training_set_v2rms <- subset(df_segvial, split==T)
+test_set_v2rms   <- subset(df_segvial, split==F)
+training_set_v2rms
+```
+
+**V2RMAuto**
+
+```{r}
+split <- sample.split(df_segvial$stV2RMAuto, SplitRatio = 2/3)
+training_set_v2rma <- subset(df_segvial, split==T)
+test_set_v2rma    <- subset(df_segvial, split==F)
+training_set_v2rma
+```
+
+Since we have to carry out the same procedure for each of the response variables, we will work one by one but following the same steps:
+
+-   Selecting the best model using lasso
+
+-   Obtain the coefficients
+
+-   Calculating the MSE
+
+#### **PeatAuto**
+
+```{r}
+# Matrices de entrenamiento y test
+
+x_train_pa <- model.matrix(stPeatAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_pa)[, -1]
+y_train_pa <- training_set_pa$stPeatAuto
+
+x_test_pa <- model.matrix(stPeatAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_pa)[, -1]
+y_test_pa <- test_set_pa$stPeatAuto
+```
+
+```{r}
+# Model creation and training
+
+# To obtain a fit with Lasso regularisation, the argument alpha=1 is given.
+# If no lambda value is specified, an automatic range is selected.
+
+modelo_pa <- glmnet(
+            x           = x_train_pa,
+            y           = y_train_pa,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_pa <- modelo_pa$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_pa$lambda)
+
+regularizacion_pa <- regularizacion_pa %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_pa %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+It can be seen that, as the value of lambda increases, the regularisation is greater and more predictors are excluded (its coefficient is 0). To identify the value of lambda that gives rise to the best model, cross-validation can be used with the function `cv.glmnet().`\
+
+```{r}
+# Evolution of the error as a function of lambda
+
+set.seed(123)
+cv_error_pa <- cv.glmnet(
+              x      = x_train_pa,
+              y      = y_train_pa,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_pa)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_pa$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+# Largest lambda value at which the test-error does not deviate more than 1sd from the minimum.
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_pa$lambda.1se)
+```
+
+The model is trained again, this time using the largest lambda value whose error is within one standard deviation of the minimum found in the cross-validation.
+
+```{r}
+# Best optimal lambda model + 1sd
+
+modelo_pa <- glmnet(
+            x           = x_train_pa,
+            y           = y_train_pa,
+            alpha       = 1,
+            lambda      = cv_error_pa$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_pa <- coef(modelo_pa) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_pa %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+
+```
+
+```{r}
+df_coeficientes_pa %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+Of the 10 available predictors, the final model includes only 2
+
+```{r}
+# Training predictions
+
+predicciones_train_pa <- predict(modelo_pa, newx = x_train_pa)
+
+# MSE training
+
+training_mse_pa <- mean((predicciones_train_pa - y_train_pa)^2)
+paste("Error (mse) de entrenamiento:", training_mse_pa)
+```
+
+```{r}
+# Test predictions
+
+predicciones_test_pa <- predict(modelo_pa, newx = x_test_pa)
+
+# MSE test
+
+test_mse_lasso_pa <- mean((predicciones_test_pa - y_test_pa)^2)
+paste("Error (mse) de test:", test_mse_lasso_pa)
+```
+
+#### **CicAuto**
+
+```{r}
+# Training and test matrices
+
+x_train_ca <- model.matrix(stCicAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_ca)[, -1]
+y_train_ca <- training_set_ca$stCicAuto
+
+x_test_ca <- model.matrix(stCicAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_ca)[, -1]
+y_test_ca <- test_set_ca$stCicAuto
+```
+
+```{r}
+# Model creation and training
+
+modelo_ca <- glmnet(
+            x           = x_train_ca,
+            y           = y_train_ca,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_ca <- modelo_ca$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_ca$lambda)
+
+regularizacion_ca <- regularizacion_ca %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_ca %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+\
+
+```{r}
+# Evolution of the error as a function of lambda
+
+
+cv_error_ca <- cv.glmnet(
+              x      = x_train_ca,
+              y      = y_train_ca,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_ca)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_ca$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_ca$lambda.1se)
+```
+
+We do not use the best optimal lambda + 1sd model, since if we do that we do not have any coefficient and we are left with only the intercept.
+
+```{r}
+# Best optimal lambda model min 
+
+modelo_ca <- glmnet(
+            x           = x_train_ca,
+            y           = y_train_ca,
+            alpha       = 1,
+            lambda      = cv_error_ca$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_ca <- coef(modelo_ca) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_ca %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+```
+
+```{r}
+df_coeficientes_ca %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+```{r}
+# Training forecasts
+
+predicciones_train_ca <- predict(modelo_ca, newx = x_train_ca)
+
+# MSE training
+
+training_mse_ca <- mean((predicciones_train_ca - y_train_ca)^2)
+paste("Error (mse) de entrenamiento:", training_mse_ca)
+```
+
+```{r}
+# Test forecasts
+
+predicciones_test_ca <- predict(modelo_ca, newx = x_test_ca)
+
+# MSE test
+
+test_mse_lasso_ca <- mean((predicciones_test_ca - y_test_ca)^2)
+paste("Error (mse) de test:", test_mse_lasso_ca)
+```
+
+#### **AutoSM**
+
+```{r}
+# Training and test matrices
+
+x_train_as <- model.matrix(stAutoSM ~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_as)[, -1]
+y_train_as <- training_set_as$stAutoSM
+
+x_test_as <- model.matrix(stAutoSM~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_as)[, -1]
+y_test_as <- test_set_as$stAutoSM
+```
+
+```{r}
+# Model creation and training
+
+modelo_as <- glmnet(
+            x           = x_train_as,
+            y           = y_train_as,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_as <- modelo_as$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_as$lambda)
+
+regularizacion_as <- regularizacion_as %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_as %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+\
+
+```{r}
+# Evolution of the error as a function of lambda
+
+cv_error_as <- cv.glmnet(
+              x      = x_train_as,
+              y      = y_train_as,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_as)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_as$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_as$lambda.1se)
+```
+
+```{r}
+# Best minimum lambda model
+
+modelo_as <- glmnet(
+            x           = x_train_as,
+            y           = y_train_as,
+            alpha       = 1,
+            lambda      = cv_error_as$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_as <- coef(modelo_as) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_as %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+```
+
+```{r}
+df_coeficientes_as %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+```{r}
+# Training forecasts
+
+predicciones_train_as <- predict(modelo_as, newx = x_train_pa)
+
+# MSE training
+
+training_mse_as <- mean((predicciones_train_as - y_train_as)^2)
+paste("Error (mse) de entrenamiento:", training_mse_as)
+```
+
+```{r}
+# Test forecasts
+
+predicciones_test_as <- predict(modelo_as, newx = x_test_as)
+
+# MSE test
+
+test_mse_lasso_as <- mean((predicciones_test_as - y_test_as)^2)
+paste("Error (mse) de test:", test_mse_lasso_as)
+```
+
+#### **AutoAuto**
+
+```{r}
+# Training and test matrices
+
+x_train_aa <- model.matrix(stAutoAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_aa)[, -1]
+y_train_aa <- training_set_aa$stAutoAuto
+
+x_test_aa <- model.matrix(stAutoAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_aa)[, -1]
+y_test_aa <- test_set_pa$stAutoAuto
+```
+
+```{r}
+# Model creation and training
+
+modelo_aa <- glmnet(
+            x           = x_train_aa,
+            y           = y_train_aa,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_aa <- modelo_aa$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_aa$lambda)
+
+regularizacion_aa <- regularizacion_aa %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_pa %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Evolution of the error as a function of lambda
+
+cv_error_aa <- cv.glmnet(
+              x      = x_train_aa,
+              y      = y_train_aa,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_pa)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_aa$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_aa$lambda.1se)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+modelo_aa <- glmnet(
+            x           = x_train_aa,
+            y           = y_train_aa,
+            alpha       = 1,
+            lambda      = cv_error_aa$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_aa <- coef(modelo_aa) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_aa %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+```
+
+```{r}
+df_coeficientes_aa %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+```{r}
+# Training forecasts
+
+predicciones_train_aa <- predict(modelo_aa, newx = x_train_aa)
+
+# MSE training
+
+training_mse_aa <- mean((predicciones_train_aa - y_train_aa)^2)
+paste("Error (mse) de entrenamiento:", training_mse_aa)
+```
+
+```{r}
+# Test forecasts
+
+predicciones_test_aa <- predict(modelo_aa, newx = x_test_aa)
+
+# MSE test
+
+test_mse_lasso_aa <- mean((predicciones_test_aa - y_test_aa)^2)
+paste("Error (mse) de test:", test_mse_lasso_aa)
+```
+
+#### **V2RMSM**
+
+```{r}
+# Training and test matrices
+
+x_train_v2rms <- model.matrix(stV2RMSM~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_v2rms)[, -1]
+y_train_v2rms <- training_set_v2rms$stV2RMSM
+
+x_test_v2rms <- model.matrix(stV2RMSM~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_v2rms)[, -1]
+y_test_v2rms <- test_set_v2rms$stV2RMSM
+```
+
+```{r}
+# Model creation and training
+
+modelo_v2rms <- glmnet(
+            x           = x_train_v2rms,
+            y           = y_train_v2rms,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_v2rms <- modelo_v2rms$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_v2rms$lambda)
+
+regularizacion_v2rms <- regularizacion_v2rms %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_v2rms %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+\
+
+```{r}
+# Evolution of the error as a function of lambda
+
+cv_error_v2rms <- cv.glmnet(
+              x      = x_train_v2rms,
+              y      = y_train_v2rms,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_v2rms)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_v2rms$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_v2rms$lambda.1se)
+```
+
+```{r}
+# Best minimum lambda model
+
+modelo_v2rms <- glmnet(
+            x           = x_train_v2rms,
+            y           = y_train_v2rms,
+            alpha       = 1,
+            lambda      = cv_error_v2rms$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_v2rms <- coef(modelo_v2rms) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_v2rms %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+```
+
+```{r}
+df_coeficientes_v2rms %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+```{r}
+# Training forecasts
+
+predicciones_train_v2rms <- predict(modelo_v2rms, newx = x_train_v2rms)
+
+# MSE training
+
+training_mse_v2rms <- mean((predicciones_train_v2rms - y_train_v2rms)^2)
+paste("Error (mse) de entrenamiento:", training_mse_v2rms)
+```
+
+```{r}
+# Test forecasts
+
+predicciones_test_v2rms <- predict(modelo_v2rms, newx = x_test_v2rms)
+
+# MSE test
+
+test_mse_lasso_v2rms <- mean((predicciones_test_v2rms - y_test_v2rms)^2)
+paste("Error (mse) de test:", test_mse_lasso_v2rms)
+```
+
+#### **V2RMAuto**
+
+```{r}
+# Training and test matrices
+
+x_train_v2rma <- model.matrix(stV2RMAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = training_set_v2rma)[, -1]
+y_train_v2rma <- training_set_pa$stV2RMAuto
+
+x_test_v2rma <- model.matrix(stPeatAuto~ Precipitacion+PBI+Temp+PMVMotor+PMTPublico+PMCiclistas+PMPeatones+ArBajaVel+ArCiclista+DenPob, data = test_set_v2rma)[, -1]
+y_test_v2rma <- test_set_v2rma$stV2RMAuto
+```
+
+```{r}
+# Model creation and training
+
+modelo_v2rma <- glmnet(
+            x           = x_train_v2rma,
+            y           = y_train_v2rma,
+            alpha       = 1,
+            nlambda     = 100,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Evolution of coefficients as a function of lambda
+
+regularizacion_v2rma <- modelo_v2rma$beta %>% 
+                  as.matrix() %>%
+                  t() %>% 
+                  as_tibble() %>%
+                  mutate(lambda = modelo_v2rma$lambda)
+
+regularizacion_v2rma <- regularizacion_v2rma %>%
+                   pivot_longer(
+                     cols = !lambda, 
+                     names_to = "predictor",
+                     values_to = "coeficientes"
+                   )
+
+regularizacion_v2rma %>%
+  ggplot(aes(x = lambda, y = coeficientes, color = predictor)) +
+  geom_line() +
+  scale_x_log10(
+    breaks = trans_breaks("log10", function(x) 10^x),
+    labels = trans_format("log10", math_format(10^.x))
+  ) +
+  labs(title = "Coeficientes del modelo en función de la regularización") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+\
+
+```{r}
+# Evolution of the error as a function of lambda
+
+cv_error_v2rma <- cv.glmnet(
+              x      = x_train_v2rma,
+              y      = y_train_v2rma,
+              alpha  = 1,
+              nfolds = 10,
+              type.measure = "mse",
+              standardize  = TRUE
+           )
+
+plot(cv_error_v2rma)
+```
+
+```{r}
+# Best lambda value found
+paste("Mejor valor de lambda encontrado:", cv_error_v2rma$lambda.min)
+```
+
+```{r}
+# Best lambda value found + 1sd
+
+paste("Mejor valor de lambda encontrado + 1 desviación estándar:", cv_error_v2rma$lambda.1se)
+```
+
+```{r}
+# Best minimum lambda model
+
+modelo_v2rma <- glmnet(
+            x           = x_train_v2rma,
+            y           = y_train_v2rma,
+            alpha       = 1,
+            lambda      = cv_error_v2rma$lambda.min,
+            standardize = TRUE
+          )
+```
+
+```{r}
+# Model coefficients
+
+df_coeficientes_v2rma <- coef(modelo_v2rma) %>%
+                   as.matrix() %>%
+                   as_tibble(rownames = "predictor") %>%
+                   rename(coeficiente = s0)
+
+df_coeficientes_v2rma %>%
+  filter(predictor != "(Intercept)") %>%
+  ggplot(aes(x = predictor, y = coeficiente)) +
+  geom_col() +
+  labs(title = "Coeficientes del modelo Lasso") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 6, angle = 45))
+```
+
+```{r}
+df_coeficientes_v2rma %>%
+  filter(
+    predictor != "(Intercept)",
+    coeficiente != 0
+) 
+```
+
+```{r}
+# Training forecasts
+
+predicciones_train_v2rma <- predict(modelo_v2rma, newx = x_train_v2rma)
+
+# MSE training
+
+training_mse_v2rma <- mean((predicciones_train_v2rma - y_train_v2rma)^2)
+paste("Error (mse) de entrenamiento:", training_mse_v2rma)
+```
+
+```{r}
+# Test forecasts
+
+predicciones_test_v2rma <- predict(modelo_v2rma, newx = x_test_v2rma)
+
+# MSE test
+
+test_mse_lasso_v2rma <- mean((predicciones_test_v2rma - y_test_v2rma)^2)
+paste("Error (mse) de test:", test_mse_lasso_v2rma)
+```
+
+#### Comparison
+
+```{r}
+df_comparacion <- data.frame(
+                    modelo = c("PeatAuto", "Cicauto", "AutoSM", "AutoAuto", "V2RMSM","V2RMAuto"),
+                    mse    = c(test_mse_lasso_pa, test_mse_lasso_ca, test_mse_lasso_as,test_mse_lasso_aa, test_mse_lasso_v2rms, test_mse_lasso_v2rma)
+)
+
+ggplot(data = df_comparacion, aes(x = modelo, y = mse)) +
+  geom_col(width = 0.5) +
+  geom_text(aes(label = round(mse, 2)), vjust = -0.1) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**Models**
+
+$$ 
+\hat{PeatAuto} = 73.81-8.8\hat{PMPeatones}-10.8\hat{ArCiclista}$$ $$\hat{CicAuto} = 22.6$$ $$
+\begin{multline}
+\hat{AutoSM} = 17.85-1.55\hat{PMPeatones}-4.86\hat{ArBajaVel}\\
+-0.53\hat{ArCiclista}-0.44\hat{DenPob}
+\end{multline}
+$$ $$
+\begin{multline}
+\hat{AutoAuto} = 30.09-16.5\hat{Precipitacion}-0.27\hat{PBI}\\
+-5.8\hat{Temp}-0.48\hat{PMCiclista}+0.15\hat{PMPeatones}\\
+-5.15\hat{ArCiclista}
+\end{multline}$$ $$
+\begin{multline}
+\hat{V2RMSM} = 15.06-4.04\hat{Precipitacion}+3.5\hat{Temp}\\
++14.27\hat{PMVMotor}-1.22\hat{PMCiclista}\\
+-12.86\hat{PMPeatones}-4.06\hat{ArBajaVel}
+\end{multline}
+$$ $$
+\hat{V2RMAuto} = 67.95+22.47\hat{Temp}-7.4\hat{ArCiclista}
+ $$
+
+For pedestrians and cyclists it can be seen that an increase in the area of both will contribute to a lower rate. For the cases where vehicles are involved, it is observed that temperature and precipitation will have an influence in some cases of increase, such as for the V2R and temperature indicators, and in others of reduction, such as with the AutoAuto MDS for precipitation, it should be noted that one cannot control the increase or decrease of these factors, but certain measures can be encouraged by considering them. Continuing along the vehicle line, increases linked to zones or areas in the vast majority of these metrics collaborate in the form of decreases, so it would be advisable to consider actions linked to this.
+
+### Recommendations
+
+The main objective of this work is to identify policies or actions to achieve zero fatalities and violent traffic accidents in various cities. Some measures that could be evaluated are:
+
+-   Increase bike lanes and low speed zones, considering the flow of vehicles, pedestrians and cyclists. The suggestion is to make an analysis and a plan in steps to increase the area of these zones, mainly where there is more use by cyclists and pedestrians who are more vulnerable at the time of a road accident.
+
+-   Aumentar los carriles bici y las zonas de baja velocidad, teniendo en cuenta el flujo de vehículos, peatones y ciclistas. La sugerencia es hacer un análisis y un plan por etapas para aumentar el área de estas zonas, principalmente donde hay más uso de ciclistas y peatones que son más vulnerables al momento de un accidente vial.
+
+-   Increase cycle lanes and low speed zones, taking into account the flow of vehicles, pedestrians and cyclists. The suggestion is to make an analysis and a phased plan to increase the area of these zones, mainly where there is more use by cyclists and pedestrians who are more vulnerable at the time of a road accident.
+
+-   Incentivise cycling or walking, when the temperature is suitable, with some form of right-of-way policy and/or, if public or rental bicycles are available, some form of differential rate or free bicycle hire.
+
+-   Pull policy for rainy or very hot weather to reduce the volume of cars.
+
+-   Transforming certain areas to pedestrian or bicycle use only at certain times of the day or on a specific day of the week is a more economical way to increase the area of these agents without the need for such a large investment as specific areas for these agents might be.

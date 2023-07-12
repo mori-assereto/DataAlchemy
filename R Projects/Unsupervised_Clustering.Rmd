@@ -1,0 +1,270 @@
+---
+title: "Unsupervised Clustering"
+author: "Mora Assereto Farroni"
+date: "2023-07-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+library(dplyr)       # basic data manipulation and plotting
+library(ggplot2)     # data visualization
+library(h2o)         # performing dimension reduction
+library(GGally)
+library(tidyverse)
+library(hrbrthemes)
+library(ggpubr)
+library(cowplot)
+library(caTools)
+library(corrplot)
+library(Hmisc)
+library(multcomp)
+library(readxl)
+library(gmodels)
+library(ggthemes)
+library(devtools)
+library(car)
+library(leaflet)
+library(psych)
+library(skimr)
+library(DataExplorer)
+library(scales)
+library(corrr)
+library(glmnet)
+library(pls)
+library(readxl)
+library(FactoMineR)
+library(factoextra)
+library(xtable)
+library(ClusterR)
+library(cluster)
+library(mclust)
+library(fpc)
+library(dbscan)
+```
+
+# Data Frame
+
+```{r}
+spotify <- readr::read_csv("songs_features.csv")
+spotify
+attach(spotify)
+```
+
+```{r}
+#library(readr)
+#spotify_songs <- read_csv("songs_metadata.csv")
+#View(spotify_songs)
+```
+
+```{r}
+describe(spotify)
+```
+
+The dataset is composed of 229 instances, each corresponding to a song. The instances are represented by 19 variables, of which 5 represent data related to id and urls, 3 categorical variables of numerical type which are mode, key and time_signature and 11 numerical variables. The categorical and numeric variables can be grouped into three categories:
+
+-   **Anímicas** contemplates all the features linked more to the emotional, in this one enter danceability, energy and valence.
+
+-   **Musical characteristics** we consider all technical values of the music such as tempo duration key mode time_signature
+
+-   **Performance** relating to how the song is played or interpreted, for this type the variables acousticness instrumentality liveness speechiness
+
+```{r}
+summary = summary(spotify)
+summary
+```
+
+Scaling the numeric variables
+
+```{r}
+df_spotify <- spotify%>% mutate_at (c ('danceability', 'energy', 'loudness','speechiness','acousticness','instrumentalness','liveness','valence',           'tempo', 'duration_ms'), ~ ( scale (.)%>% as.vector ))
+```
+
+We generate a dataframe with only the numeric variables
+
+```{r}
+data_spotify<- df_spotify %>% dplyr::select('danceability', 'energy', 'loudness','speechiness','acousticness','instrumentalness','liveness','valence','tempo', 'duration_ms')
+
+```
+
+```{r}
+ggcorr(df_spotify, method = c("everything", "pearson"))
+
+```
+
+### Exploring data
+
+```{r}
+glimpse(df_spotify)
+```
+
+## PCA
+
+```{r}
+df_spotify 
+  
+```
+
+```{r}
+data_PCA <- df_spotify %>% dplyr::select('danceability', 'energy', 'loudness','speechiness','acousticness','instrumentalness','liveness','valence','tempo', 'duration_ms')
+```
+
+```{r}
+### Calculate PCA
+
+res.pca <- PCA(data_PCA, graph = FALSE)
+
+# Eigenvalue chart
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50), main="", xlab="Dimensiones", ylab="Porcetaje de var.")
+```
+
+```{r}
+# Contribution of the variable to the component
+res.pca$var$contrib
+```
+
+```{r}
+# Chart contribution of the variables to the first component
+
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10, title="Contribución a la primer componente")
+```
+
+### PCA Conclusion
+
+Given that I require almost all my variables to contribute, there is no point in doing PCA.
+
+# K-Means
+
+K-means clustering finds the K best clusters, with the best cluster being understood as the one whose intra-cluster variation is as small as possible. It is therefore an optimisation problem, in which the observations are distributed in K clusters in such a way that the sum of the internal variances of all of them is as small as possible. In order to solve this problem, it is necessary to define a way to quantify the internal variance.
+
+A simple way to estimate the optimal number K of clusters when there is no additional information to rely on is to apply the K-means algorithm for a range of values of K and identify that value beyond which the reduction in the total sum of intra-cluster variance is no longer substantial. This strategy is known as the elbow method.
+
+```{r}
+
+fviz_nbclust(x = data_spotify, FUNcluster = kmeans, method = "wss", k.max = 20, diss = get_dist(data_spotify, method = "euclidean"), nstart = 50)
+```
+
+K can be between 11 and 15 In this analysis, from 11 to 15 clusters the reduction in the total sum of inner squares seems to stabilise, indicating that K = 13 is a good choice.
+
+Visualisations of the resulting clusters. If the number of variables (dimensionality) is greater than 2, it automatically performs a PCA and represents the first two principal components.
+
+```{r}
+set.seed(123)
+# Max overlap must be removed 
+options(ggrepel.max.overlaps = Inf)
+km_clusters <- kmeans(x = data_spotify, centers = 13, nstart = 50)
+
+# The functions of the factoextra package use the name of the rows of the dataframe containing the data as the identifier for the observations.
+# dataframe containing the data as the identifier of the observations.
+# This allows labels to be added to the graphs.
+fviz_cluster(object = km_clusters, data = data_spotify, show.clust.cent = TRUE,
+             ellipse.type = "euclid", star.plot = TRUE, repel = TRUE) +
+  labs(title = "Resultados clustering K-means") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+There is a lot of over-positioning
+
+We plot for K=13 we should choose two dimensions and modify the code below
+
+```{r}
+# The cluster number to which each observation has been assigned is represented and
+# shows with a colour code the actual cluster to which it belongs.
+
+datos <- data_spotify %>% mutate(cluster = km_clusters$cluster)
+datos <- data_spotify %>% mutate(cluster = as.factor(cluster),
+                        #  grupo   = as.factor(grupo))
+
+ggplot(data = datos, aes(x = x, y = y, color = grupo)) +
+  geom_text(aes(label = cluster), size = 5) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+# Model Base
+
+Model-based clustering considers observations as coming from a distribution that is itself a combination of two or more components (clusters), each with a distribution of its own. In principle, each cluster can be described by any density function, but it is usually assumed that they follow a multivariate normal distribution. The Expectation-Maximization (EM) algorithm is used to estimate the parameters defining the distribution function of each cluster (mean and covariance matrix if they are assumed to be of normal type). This solves different models in which the volume, shape and orientation of the distributions can be considered the same for all clusters or different for each cluster. For example, a possible model is: constant volume, variable shape, variable orientation. mclust package uses maximum likelihood to fit all these models with different number k of clusters and selects the best one based on the Bayesian Information Criterion (BIC).
+
+```{r}
+# Model-based-clustering
+model_clustering <- Mclust(data = data_spotify, G = 1:10)
+summary(model_clustering)
+```
+
+The fitting algorithm selects as the best model the one formed by 3 clusters, each with an ellipsoidal shape and its own volume, shape and orientation (VVE). Model-based clustering is fuzzy, i.e., for each observation a degree of belonging to each cluster is calculated and finally assigned to the one with the highest value.
+
+```{r}
+# Degree of allocation to each cluster
+head(model_clustering$z)
+```
+
+```{r}
+# Final ranking
+head(model_clustering$classification)
+```
+
+## Visualisation
+
+```{r}
+# BIC value curves as a function of the number of clusters for each model.
+# Attention to the order in which the horizontal variable is shown, by default it is
+# alphabetical.
+fviz_mclust(object = model_clustering, what = "BIC", pallete = "jco") +
+  scale_x_discrete(limits = c(1:10))
+```
+
+```{r}
+# Clusters
+fviz_mclust(model_clustering, what = "classification", geom = "point",
+            pallete = "jco")
+```
+
+```{r}
+# Certainty of classifications. The larger the point size, the lower the
+# Assignment certainty
+fviz_mclust(model_clustering, what = "uncertainty", pallete = "jco")
+```
+
+# DBSCAN
+
+```{r}
+# Selection of the optimal epsilon value. As minPts value 5 is used.
+dbscan::kNNdistplot(data_spotify, k = 5)
+```
+
+The curve has the inflection point around 2 or 3, so this value is chosen as the epsilon for DBSCAN.
+
+```{r}
+set.seed(321)
+
+# DBSCAN with epsilon = 2.5 and minPts = 5
+dbscan_cluster <- fpc::dbscan(data = data_spotify, eps = 2.5, MinPts = 5)
+
+# Assignment results
+head(dbscan_cluster$cluster)
+```
+
+```{r}
+# Visualisation of clusters
+fviz_cluster(object = dbscan_cluster, data = data_spotify, stand = FALSE,
+             geom = "point", ellipse = FALSE, show.clust.cent = FALSE,
+             pallete = "jco") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+# Some things to improve
+
+1) Scaling the variables?
+
+2) Improve internal validation, adding indices that reflect how good the clusters are that are constructed with mixed methods or k-means.
+
+3) Use a stability method to find out how robust the clusters are.
+
+4) You could compare the clusters achieved with each method. Are the partitions similar or very dissimilar?
