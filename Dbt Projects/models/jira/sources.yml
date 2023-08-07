@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: jira
+    schema: jira_to_redshift_2
+    tables:
+      - name: changelogs
+      - name: changelogs__items
+      - name: issues

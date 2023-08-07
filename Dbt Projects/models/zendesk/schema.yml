@@ -1,0 +1,220 @@
+version: 2
+
+models:
+  - name: zk_tickets
+    description: '{{ doc("zk_tickets_description") }}'
+
+    columns:
+      - name: id
+        description: Clave de identificación del ticket
+        #tests:
+        #  - unique
+        #  - not_null
+
+      - name: solved_at
+        description: Fecha en la que el ticket fue solucionado
+
+      - name: platform_account_id
+        description: >
+          Referencia a la cuenta en Platform del usuario que realizó el ticket
+
+      - name: is_within_first_30_days_as_client
+        description: >
+          Flag que indica si el ticket se realizó dentro de los primeros 30
+          días de vida del cliente
+
+      - name: subscription_id
+        description: Referencia a la suscripción relacionada con el ticket
+
+      - name: onboarding_stage
+        description: >
+          Etapa en la que estaba el cliente cuando se generó el ticket
+
+      - name: ticket_circle
+        description: >
+          Círculo responsable del ticket
+
+      - name: country
+        description: País del ticket
+
+      - name: zendesk_product
+        description: Producto de la consulta del ticket
+
+      - name: ticket_category
+        description: >
+          Categoría del ticket (Onboarding, Formulario Interno, Baja, Gestión
+          Diaria, Revenue to be defined, Old Zendesk)
+
+      - name: was_derived
+        description: Flag que indica si el ticket fue derivado de área
+
+      - name: is_proactive
+        description: >
+          Flag que indica si el ticket es un ticket generado proactivamente
+
+      - name: lifetime_days
+        description: >
+          Días desde la creación del ticket hasta su resolución si fue resuelto
+          o hasta el día corriente en caso de que no haya sido resuelto
+
+      - name: has_jira
+        description: >
+          Flag que indica si el ticket tiene asociado una card de Jira
+        tests:
+          - accepted_values:
+              values: [true, false]
+              quote: False
+
+      - name: is_faltantes
+        description: >
+          Flag que indica si el ticket esta asociado a un caso de faltantes
+        tests:
+          - accepted_values:
+              values: [true, false]
+              quote: False
+
+      - name: jira_card_name
+        description: Título de la card
+
+      - name: jira_card_number
+        description: Numero de identificación de la Card
+
+      - name: jira_issue_type
+        description: Tipo de Card
+
+      - name: jira_status
+        description: Estado en el cual se encuentra la card
+
+      - name: origin
+        description: Origen del usuario
+
+      - name: has_canceled_typification
+        description: >
+          Flag que indica si el ticket en algún momento de su ciclo de vida fue
+          tipificado como ticket de baja
+
+      - name: has_canceled_flag
+        description: >
+          Flag que indica si el ticket en algún momento de su ciclo de vida fue
+          considerado como ticket de baja
+
+      - name: scaling
+        description: >
+          Categoriza a los tickets por tipo de escalamiento
+
+      - name: product_scaling
+        description: >
+          Categoriza a los tickets escalados de producto por priorización
+
+      - name: is_solved
+        description: >
+          Flag que indica si el ticket esta resuelto
+
+      - name: lifetime_category
+        description: >
+          Categoriza los tickets de acuerdo a su tiempo de vida y producto
+
+      - name: has_achieve_sla
+        description: >
+          Flag que indica si el ticket cumple con las metas de SLA pactadas
+
+      - name: lifetime_jira_card
+        description: >
+          Indica el tiempo que paso desde la creación de la card y la resolución
+          del ticket
+
+      - name: is_reopen
+        description: Flag que indica si el ticket fue reabierto
+
+      - name: jira_card_created_at
+        description: >
+          Indica la fecha de creación de la card de jira vinculada al ticket
+
+  - name: zk_tickets_incoming
+    description: '{{ doc("zk_tickets_incoming_description") }}'
+
+    columns:
+      - name: ticket_id
+        description: Clave foranea al id del ticket
+        tests:
+          - not_null
+          - relationships:
+              to: 'source("zendesk", "tickets")'
+              field: id
+
+      - name: date_day
+        description: Fecha en la que se realizó el comentario
+
+      - name: audit_id
+        description: Clave foranea al id de los audits
+
+  - name: zk_tickets_outgoing
+    description: '{{ doc("zk_tickets_outgoing_description") }}'
+
+    columns:
+      - name: ticket_id
+        description: Clave foraneade identificación del ticket
+        tests:
+          - not_null
+          - relationships:
+              to: 'source("zendesk", "tickets")'
+              field: id
+
+      - name: date_day
+        description: Fecha en la que se realizó el comentario
+
+  - name: zk_tickets_custom_fields
+    columns:
+      - name: id
+        tests:
+          - not_null
+        ## Faild Because of new integration
+        ## - relationships:
+        ##      to: ref('zk_ticket_fields')
+        ##      field: id
+
+      - name: ticket_id
+        tests:
+          - not_null
+        ## Faild Because of new integration
+        ##  - relationships:
+        ##      to: ref('zk_tickets_base')
+        ##      field: id
+
+  - name: zk_ticket_fields
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+
+  - name: zk_tickets_with_typification_l1
+    description: '{{ doc("zk_tickets_with_typification_l1_description") }}'
+    columns:
+      - name: ticket_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: typification_l1
+        description: Nombre de la tipificación de nivel 1
+
+      - name: value_typification_l1
+        description: Valor de la tipificación de nivel 1
+
+  - name: zendesk_tickets_with_scaling
+    description: '{{ doc("zendesk_tickets_with_scaling_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: scaling
+        description: Valor del escalamiento

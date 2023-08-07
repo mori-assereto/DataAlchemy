@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: mixpanel
+    schema: mixpanel_v4_to_redshift
+    tables:
+      - name: mixpanel_engage
+      - name: mixpanel_export

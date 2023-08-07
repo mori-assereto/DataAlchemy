@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: zendesk
+    schema: zendesk_to_redshift
+    tables:
+      - name: group_memberships
+      - name: groups
+      - name: organizations
+      - name: organizations__tags
+      - name: satisfaction_ratings
+      - name: tags
+      - name: ticket_audits
+      - name: ticket_audits__events
+      - name: ticket_fields
+      - name: ticket_fields__custom_field_options
+      - name: ticket_forms
+      - name: ticket_forms__ticket_field_ids
+      - name: ticket_metrics
+      - name: tickets
+      - name: tickets__custom_fields
+      - name: tickets__custom_fields__value
+      - name: ticket_comments
+      - name: tickets__tags
+      - name: users
+      - name: users__tags

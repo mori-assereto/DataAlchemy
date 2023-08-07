@@ -1,0 +1,210 @@
+version: 2
+
+models:
+
+  - name: metrics_arps
+    tests:
+     - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - country
+            - month
+            - partner
+            - product
+            - origin
+            - enterprise
+
+  - name: metrics_churn
+    description: '{{ doc("metrics_churn_description") }}'
+
+    columns:
+      - name: contact_center
+        description: Contact Center que gestionó la suscripción
+
+      - name: contact_center_type
+        description: Tipo de Contact Center
+
+      - name: country
+        description: País de las suscripciones
+
+        tests:
+          - not_null
+
+      - name: cumulative_subscriptions_lost
+        description: Suscripciones perdidas acumuladas hasta el mes `month`
+
+      - name: cumulative_subscriptions_won
+        description: Suscripciones ganadas acumuladas hasta el mes `month`
+
+      - name: enterprise
+        description: Flag que indica si las suscripciones son enterprise
+
+        tests:
+          - not_null
+
+      - name: month
+        description: Mes
+
+        tests:
+          - not_null
+
+      - name: origin
+        description: Origen de las suscripciones
+
+      - name: partner
+        description: Partner de las suscripciones
+
+      - name: partners_type
+        description: Tipo de Partner
+
+      - name: paying_subscriptions_on_current_month
+        description: Suscripciones pagando en el mes `month` transcurrido
+
+      - name: paying_subscriptions_on_previous_month
+        description: Suscripciones pagando al finalizar el mes previo a `month`
+
+      - name: payment_method
+        description: Método de pago de las suscripciones
+
+      - name: product
+        description: Producto de las suscripciones
+
+        tests:
+          - not_null
+
+      - name: subscriptions_lost
+        description: Suscripciones perdidas en el mes `month`
+
+      - name: subscriptions_won
+        description: Suscripciones ganadas en el mes `month`
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - month
+            - product
+            - country
+            - partner
+            - partners_type
+            - contact_center
+            - contact_center_type
+            - payment_method
+            - origin
+            - enterprise
+            - pay_plan
+
+  - name: metrics_ltv
+    description: '{{ doc("metrics_ltv_description") }}'
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - country
+            - month
+            - partner
+            - product
+            - origin
+            - enterprise
+
+    columns:
+      - name: country
+        description: País de las suscripciones
+
+      - name: enterprise
+        description: >
+          Flag que indica si las métricas corresponden a suscripciones de
+          cuentas enterprise
+
+      - name: month
+        description: Mes
+
+      - name: origin
+        description: Origen de las suscripciones
+
+      - name: partner
+        description: Partner de las suscripciones
+
+      - name: paying_subscriptions_on_current_month
+        description: Cantidad de suscripciones pagando en el mes
+
+      - name: paying_subscriptions_on_previous_month
+        description: >
+          Cantidad de suscripciones pagando en el mes anterior a `month`
+
+      - name: product
+        description: Producto de las suscripciones
+
+      - name: revenue_usd
+        description: >
+          Suma del revenue en USD de las suscripciones correspondientes
+
+      - name: subscriptions_lost
+        description: Cantidad de bajas
+
+  - name: metrics_nps
+    description: '{{ doc("metrics_nps_description") }}'
+    tests:
+      - dbt_utils.expression_is_true:
+          condition: "answered_at >= '2020-03-27'"
+          expression: "user_id is not null"
+
+    columns:
+        - name: account_id
+          description: Referencia a la cuenta de Platform
+          tests:
+            - not_null:
+                severity: warn
+
+            - relationships:
+                to: source('platform','accounts')
+                field: id
+
+        - name: answered_at
+          description: Fecha de respuesta
+          tests:
+            - not_null
+
+        - name: comment
+          description: Comentario del usuario
+
+        - name: country
+          description: País de origen de la suscripción
+
+        - name: enterprise
+          description: Flag que indica si el usuario pertenece a una cuenta enterprise
+
+          tests:
+            - not_null:
+                severity: warn
+
+        - name: id
+          description: ID de la respuesta
+
+        - name: is_detractor
+          description: Flag que indica si la respuesta es de un usuario detractor (1 o 0)
+
+        - name: is_neutral
+          description: Flag que indica si la respuesta es de un usuario neutral (1 o 0)
+
+        - name: is_promoter
+          description: Flag que indica si la respuesta es de un usuario promotor (1 o 0)
+
+        - name: product
+          description: Producto desde dónde se esta respondiendo la encuesta
+
+        - name: score
+          description: Puntaje otorgado por el usuario
+
+        - name: subscription_id
+          description: Referencia a la suscripción de Platform
+          tests:
+            - relationships:
+                to: source('platform','subscriptions')
+                field: id
+                severity: warn
+
+        - name: user_id
+          description: Referencia al usuario de Platform
+          tests:
+            - relationships:
+                to: source('platform','users')
+                field: id
+                severity: warn

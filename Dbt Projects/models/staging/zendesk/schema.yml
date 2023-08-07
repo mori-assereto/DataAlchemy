@@ -1,0 +1,218 @@
+version: 2
+
+models:
+  - name: zendesk_tickets_derivation_values
+    description: Tabla con todos los valores asignados a los tickets al momento de derivarlo
+
+    columns:
+      - name: value
+        description: Etiqueta de derivación
+        tests:
+          - unique
+          - not_null
+
+  - name: zendesk_tickets_derivations
+    description: '{{ doc("zendesk_tickets_derivations_description") }}'
+
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: 'source("zendesk", "tickets")'
+              field: id
+
+      - name: was_derived
+        description: Flag que indica si el ticket fue derivado o no
+        tests:
+          - accepted_values:
+              values: [true, false]
+              quote: False
+
+  - name: zendesk_tickets_proactiveness
+    description: '{{ doc("zendesk_tickets_proactiveness_description") }}'
+
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: 'source("zendesk", "tickets")'
+              field: id
+
+      - name: is_proactive
+        description: Flag que indica si el ticket fue generado proactivamente por soporte
+        tests:
+          - accepted_values:
+              values: [true, false]
+              quote: False
+
+  - name: zendesk_tickets_with_canceled_typification
+    description: '{{ doc("zendesk_tickets_with_canceled_typification_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: canceled_typification
+        description: Valor de la tipificación de baja
+
+
+  - name: zendesk_tickets_with_jira_values
+    description: '{{ doc("zendesk_tickets_with_jira_values_description") }}'
+    columns:
+      - name: jira_card_name
+        description: Título de la card
+
+      - name: jira_card_number
+        description: Numero de identificación de la Card
+        tests:
+          - not_null
+
+      - name: jira_issue_type
+        description: Tipo de Card
+
+      - name: jira_status
+        description: Estado en el cual se encuentra la card
+
+      - name: ticket_id
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+  - name: zendesk_tickets_with_onboarding_events
+    columns:
+      - name: ticket_id
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+  - name: zendesk_tickets_with_origin
+    description: '{{ doc("zendesk_tickets_with_origin_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: origin
+        description: Origen del usuario
+
+  - name: zendesk_tickets_with_zendesk_product
+    columns:
+      - name: ticket_id
+        tests:
+          - unique:
+              severity: warn
+          # FIXME: Some tickets have two product
+          # fields corresponding to cx and sales
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+  - name: zendesk_tickets_with_subscription_state
+    description: '{{ doc("zendesk_tickets_with_subscription_state_description") }}'
+    columns:
+      - name: ticket_id
+        description: referencia a la cuenta
+        tests:
+        #  - not_null
+        #  - unique
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: subscription_state
+        description: >
+          Estado en el que se encontraba la suscripción del producto al momento
+          de la creación del ticket
+
+  - name: zendesk_tickets_with_subscription
+    description: '{{ doc("zendesk_tickets_with_subscription_description") }}'
+    columns:
+      - name: account_id
+        description: referencia a la cuenta
+        tests:
+          - not_null
+          - relationships:
+              to: ref('platform_accounts')
+              field: id
+
+      - name: created_at
+        description: Fecha de creación del ticket
+
+      - name: subscription_id
+        description: Referencia a la suscripción
+        tests:
+          - not_null
+          - relationships:
+              to: ref('platform_subscriptions')
+              field: id
+
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          #- unique
+          #- not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+
+  - name: zendesk_tickets_with_product_scaling
+    description: '{{ doc("zendesk_tickets_with_product_scaling_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: product_scaling
+        description: Valor de priorización del escalamiento
+
+  - name: zendesk_tickets_with_tag_closed_by_merge
+    description: '{{ doc("zendesk_tickets_with_tag_closed_by_merge_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: value
+        description: Nombre de la etiqueta de fusion
+
+  - name: zendesk_tickets_is_reopen
+    description: '{{ doc("zendesk_tickets_is_reopen_description") }}'
+    columns:
+      - name: ticket_id
+        description: Referencia al ticket
+        tests:
+          - not_null
+          - relationships:
+              to: source('zendesk', 'tickets')
+              field: id
+
+      - name: is_reopen
+        description: Flag que indica si un ticket fue re-abierto

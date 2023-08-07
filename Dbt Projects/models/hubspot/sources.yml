@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: hubspot
+    schema: hubspot_to_redshift
+    tables:
+      - name: companies
+      - name: contacts
+      - name: contacts_by_company
+      - name: contacts__form-submissions
+      - name: deals
+      - name: deals__associations__associatedcompanyids
+      - name: owners

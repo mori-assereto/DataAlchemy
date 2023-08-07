@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: jira_bugs
+    description: '{{ doc("jira_bugs_description") }}'
+
+    columns:
+      - name: id
+        description: ID
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: source('jira', 'issues')
+              field: id
+
+      - name: days_to_report
+        description: >
+          Días que llevó detectar y reportar el incidente
+          (reported_at - created_at)
+
+      - name: days_to_repair
+        description: >
+          Días que llevó resolver (o lleva en caso de no estar resuelto) el
+          incidente desde su creación como card (solved_at - created_at)
+
+      - name: days_to_unsolved
+        description: >
+          Días que llevó resolver (o lleva en caso de no estar resuelto) el
+          incidente desde su primera ocurrencia (solved_at - reported_at)
+
+      - name: jira_card_number
+        description: Numero de la card de jira
+
+      - name: jira_project
+        description: Identificacion alfabetica del proyecto de jira
+
+      - name: jira_issue_type
+        description: Tipo de card de jira
+
+      - name: jira_priority
+        description: Prioridad de la card
+
+      - name: assignee_name
+        description: Persona a la cual se le asigno la card
+
+      - name: creator_name
+        description: Persona que creo la card
+
+      - name: reporter_name
+        description: Persona que reporto la card
+
+      - name: reporter_circle
+        description: Círculo que reporto el issue
+
+      - name: l1_typification
+        description: Primer nivel de árbol de tipificación
+
+      - name: l1_typification
+        description: Segundo nivel de árbol de tipificación
+
+      - name: payment_method
+        description: Metodo de cobro
+
+      - name: reported_at
+        description: Fecha en la que se reportó el incidente
+
+      - name: created_at
+        description: Fecha de creación de la card
+
+      - name: solved_at
+        description: Fecha en la que se solucionó el incidente
+
+      - name: jira_card_status
+        description: Estado actual del incidente
+
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "days_to_repair is not null"
+          condition: "reported_at is not null"

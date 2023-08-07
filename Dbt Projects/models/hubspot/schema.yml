@@ -1,0 +1,130 @@
+version: 2
+
+models:
+  - name: hubspot_deals
+    description: '{{ doc("hubspot_deals_description") }}'
+
+
+  - name: hubspot_sales_cycle
+    description: '{{ doc("metrics_active_accounts_description") }}'
+
+    columns:
+      - name: deal_id
+        description: Referencia del deal o negocio
+        tests:
+          - not_null
+          - relationships:
+              to: source('hubspot', 'deals')
+              field: dealid
+
+      - name: name
+        description: Nombre del deal
+
+      - name: stage
+        description: Etapa en la que se encuentra actualmente el deal
+
+      - name: plan
+        description: Tipo de plan de precio
+
+      - name: mrr_usd
+        description: Monthly Recurrent Revenue en USD del plan
+
+      - name: country
+        description: País del deal
+
+      - name: partner
+        description: Que partner origino el lead
+
+      - name: subscription_id
+        description: Id de referencia a la suscripcion en platform
+
+      - name: owner_id
+        description: Referencia al id vendedor que gestiona la venta
+
+      - name: lead_entered_date
+        description: Fecha en la que el deal ingreso a la etapa lead
+
+      - name: lead_exited_date
+        description: Fecha en la que el deal salio de la etapa lead
+
+      - name: lead_duration
+        description: Tiempo transcurrido en la etapa lead en días
+
+      - name: presentation_scheduled_entered_date
+        description: Fecha en la que el deal ingreso a la etapa reunion agendada
+
+      - name: presentation_scheduled_exited_date
+        description: Fecha en la que el deal salio de la etapa reunion agendada
+
+      - name: presentation_scheduled_duration
+        description: Tiempo transcurrido en la etapa reunion agendada en días
+
+      - name: demo_scheduled_entered_date
+        description: Fecha en la que el deal ingreso a la etapa demo realizada
+
+      - name: demo_scheduled_exited_date
+        description: Fecha en la que el deal salio de la etapa demo realizada
+
+      - name: demo_scheduled_duration
+        description: Tiempo transcurrido en la etapa demo agendada en días
+
+      - name: lead_qualified_duration
+        description: Duracion de la etapa de calificacion del lead en días
+
+      - name: contract_sent_entered_date
+        description: Fecha en la que el deal ingreso a la etapa propuesta enviada
+
+      - name: contract_sent_exited_date
+        description: Fecha en la que el deal salio de la etapa propuesta enviada
+
+      - name: contract_sent_duration
+        description: Tiempo transcurrido en la etapa propuesta enviada en días
+
+      - name: closed_won_date
+        description: Fecha en la que el deal ingreso a la etapa cierre ganado
+
+      - name: day_proposal_sent
+        description: Dia que se envio la propuesta comercial
+
+      - name: close_won_duration
+        description: >
+          Tiempo transcurrido entre que se envia la propuesta y
+          la acepta
+
+      - name: total_days_to_convert
+        description: >
+          Cantidad total de días hasta que un deal pasa de lead a closed
+          won
+
+      - name: date_month
+        description: Mes de creación del deal
+
+      - name: closed_lost_date
+        description: Fecha en la que el deal entra a etapa de cierre perdido
+
+      - name: pay_closed_lost_reason
+        description: Motivo por el cual se lo paso a cierre perdido
+
+      - name: deal_lifetime
+        description: Tiempo de vida del deal en dias
+
+      - name: has_lead_stage
+        description: Flag que indica si paso por el stage de lead
+
+      - name: has_presentation_scheduled_stage
+        description: Flag que indica si paso por el stage de reunion agendada
+
+      - name: has_demo_scheduled_stage
+        description: Flag que indica si paso por el stage de demo agendada
+
+      - name: has_contract_sent_stage
+        description: Flag que indica si paso por el stage de propuesta enviada
+
+      - name: has_closed_won_stage
+        description: Flag que indica si paso por el stage de cierre ganado
+
+      - name: has_closed_lost_stage
+        description: Flag que indica si paso por el stage de cierre perdido
+
+      - name: email
+        description: Email del vendedor que gestiona la venta
